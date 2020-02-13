@@ -1971,6 +1971,7 @@ static const struct dev_pm_ops qti_flash_led_pm_ops = {
 };
 
 static const struct of_device_id qti_flash_led_match_table[] = {
+	{ .compatible = "qcom,pm2250-flash-led", .data = (void *)1, },
 	{ .compatible = "qcom,pm8350c-flash-led", .data = (void *)4, },
 	{ },
 };
