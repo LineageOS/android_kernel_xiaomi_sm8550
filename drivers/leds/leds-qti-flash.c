@@ -403,7 +403,7 @@ static int qti_flash_poll_vreg_ok(struct qti_flash_led *led)
 
 	for (i = 0; i < 60; i++) {
 		/* wait for the flash vreg_ok to be set */
-		usleep_range(5000, 5500);
+		mdelay(5);
 
 		rc = qti_flash_iio_getprop(led, F_TRIGGER, &pval);
 		if (rc < 0) {
