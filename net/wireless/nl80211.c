@@ -5736,8 +5736,8 @@ static int nl80211_calculate_ap_params(struct cfg80211_ap_settings *params)
 	cap = cfg80211_find_ext_elem(WLAN_EID_EXT_HE_OPERATION, ies, ies_len);
 	if (cap && cap->datalen >= sizeof(*params->he_oper) + 1)
 		params->he_oper = (void *)(cap->data + 1);
-#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	cap = cfg80211_find_ext_elem(WLAN_EID_EXT_EHT_CAPABILITY, ies, ies_len);
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	if (cap) {
 		if (!cap->datalen)
 			return -EINVAL;
@@ -5756,6 +5756,9 @@ static int nl80211_calculate_ap_params(struct cfg80211_ap_settings *params)
 						cap->datalen - 1))
 			return -EINVAL;
 	}
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+	if (cap && cap->datalen >= sizeof(*params->eht_cap) + 1)
+		params->eht_cap = (void *)(cap + 3);
 #endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 	return 0;
 }
