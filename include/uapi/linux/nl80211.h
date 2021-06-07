@@ -3325,6 +3325,8 @@ enum nl80211_attrs {
 	NL80211_ATTR_RESERVED_DO_NOT_USE_24 = 335,
 	NL80211_ATTR_RESERVED_DO_NOT_USE_25 = 336,
 
+	NL80211_ATTR_EHT_PUNCTURE_BITMAP = 350,
+
 	/* add attributes here, update the policy in nl80211.c */
 
 	__NL80211_ATTR_AFTER_LAST,
