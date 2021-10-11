@@ -781,6 +781,7 @@ static inline void wiphy_read_of_freq_limits(struct wiphy *wiphy)
 #define VHT_MUMIMO_GROUPS_DATA_LEN (WLAN_MEMBERSHIP_LEN +\
 				    WLAN_USER_POSITION_LEN)
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 /**
  * struct vif_params - describes virtual interface parameters
  * @flags: monitor interface flags, unchanged if 0, otherwise
@@ -804,6 +805,35 @@ struct vif_params {
 	const u8 *vht_mumimo_groups;
 	const u8 *vht_mumimo_follow_addr;
 };
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+/**
+ * struct vif_params - describes virtual interface parameters
+ * @flags: monitor interface flags, unchanged if 0, otherwise
+ *	%MONITOR_FLAG_CHANGED will be set
+ * @use_4addr: use 4-address frames
+ * @macaddr: address to use for this virtual interface.
+ *	If this parameter is set to zero address the driver may
+ *	determine the address as needed.
+ *	This feature is only fully supported by drivers that enable the
+ *	%NL80211_FEATURE_MAC_ON_CREATE flag.  Others may support creating
+ **	only p2p devices with specified MAC.
+ * @vht_mumimo_groups: MU-MIMO groupID, used for monitoring MU-MIMO packets
+ *	belonging to that MU-MIMO groupID; %NULL if not changed
+ * @vht_mumimo_follow_addr: MU-MIMO follow address, used for monitoring
+ *	MU-MIMO packets going to the specified station; %NULL if not changed
+ * @mld_macaddr: MLO address to use for this virtual interface.
+ * @mld_reference: MLO reference to use for this virtual interface.
+ */
+struct vif_params {
+	u32 flags;
+	int use_4addr;
+	u8 macaddr[ETH_ALEN];
+	const u8 *vht_mumimo_groups;
+	const u8 *vht_mumimo_follow_addr;
+	u8 mld_macaddr[ETH_ALEN];
+	u32 mld_reference;
+};
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 /**
  * struct key_params - key information

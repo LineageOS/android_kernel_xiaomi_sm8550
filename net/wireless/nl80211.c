@@ -814,6 +814,8 @@ static const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
 	[NL80211_ATTR_PUNCT_BITMAP] =
 		NLA_POLICY_FULL_RANGE(NLA_U32, &nl80211_punct_bitmap_range),
 	[NL80211_ATTR_EHT_PUNCTURE_BITMAP] = { .type = NLA_U32 },
+	[NL80211_ATTR_MLD_MAC] = NLA_POLICY_EXACT_LEN_WARN(ETH_ALEN),
+	[NL80211_ATTR_MLD_REFERENCE] = { .type = NLA_U32 },
 };
 
 /* policy for the key attributes */
@@ -4291,6 +4293,27 @@ static int _nl80211_new_interface(struct sk_buff *skb, struct genl_info *info)
 	err = nl80211_parse_mon_options(rdev, type, info, &params);
 	if (err < 0)
 		return err;
+
+#ifdef CFG80211_PROP_MULTI_LINK_SUPPORT
+	if (info->attrs[NL80211_ATTR_MLD_MAC]) {
+		if (wiphy_ext_feature_isset(&rdev->wiphy, NL80211_EXT_FEATURE_MLO)) {
+			nla_memcpy(params.mld_macaddr, info->attrs[NL80211_ATTR_MLD_MAC],
+				   ETH_ALEN);
+			if (!is_valid_ether_addr(params.mld_macaddr))
+				return -EADDRNOTAVAIL;
+		} else {
+			return -EOPNOTSUPP;
+		}
+	}
+
+	if (info->attrs[NL80211_ATTR_MLD_REFERENCE]) {
+		if (wiphy_ext_feature_isset(&rdev->wiphy, NL80211_EXT_FEATURE_MLO))
+			params.mld_reference =
+				nla_get_u32(info->attrs[NL80211_ATTR_MLD_REFERENCE]);
+		else
+			return -EOPNOTSUPP;
+	}
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (!msg)

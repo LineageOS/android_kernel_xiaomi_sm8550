@@ -2780,6 +2780,9 @@ enum nl80211_commands {
  *	indicates that the sub-channel is punctured. Higher 16 bits are
  *	reserved.
  *
+ * @NL80211_ATTR_MLD_MAC: MLD MAC address.
+ * @NL80211_ATTR_MLD_REFERENCE: MLD Reference.
+ *
  * @NUM_NL80211_ATTR: total number of nl80211_attrs available
  * @NL80211_ATTR_MAX: highest attribute number currently defined
  * @__NL80211_ATTR_AFTER_LAST: internal use
@@ -3326,6 +3329,8 @@ enum nl80211_attrs {
 	NL80211_ATTR_RESERVED_DO_NOT_USE_25 = 336,
 
 	NL80211_ATTR_EHT_PUNCTURE_BITMAP = 350,
+	NL80211_ATTR_MLD_MAC,
+	NL80211_ATTR_MLD_REFERENCE,
 
 	/* add attributes here, update the policy in nl80211.c */
 
