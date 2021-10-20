@@ -6473,6 +6473,10 @@ struct wireless_dev {
 	} links[IEEE80211_MLD_MAX_NUM_LINKS];
 	u16 valid_links;
 
+#ifdef CFG80211_PROP_MULTI_LINK_SUPPORT
+	u8 mld_address[ETH_ALEN] __aligned(sizeof(u16));
+#endif
+
 	ANDROID_BACKPORT_RESERVED(1);
 	ANDROID_BACKPORT_RESERVED(2);
 	ANDROID_BACKPORT_RESERVED(3);

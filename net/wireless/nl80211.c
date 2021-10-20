@@ -3867,6 +3867,13 @@ static int nl80211_send_iface(struct sk_buff *msg, u32 portid, u32 seq, int flag
 	    nla_put_u8(msg, NL80211_ATTR_4ADDR, wdev->use_4addr))
 		goto nla_put_failure;
 
+#ifdef CFG80211_PROP_MULTI_LINK_SUPPORT
+	if (wiphy_ext_feature_isset(&rdev->wiphy, NL80211_EXT_FEATURE_MLO)) {
+		if (nla_put(msg, NL80211_ATTR_MLD_MAC, ETH_ALEN, wdev->mld_address))
+			goto nla_put_failure;
+	}
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+
 	if (rdev->ops->get_channel && !wdev->valid_links) {
 		struct cfg80211_chan_def chandef = {};
 		int ret;
