@@ -1550,6 +1550,22 @@ struct cfg80211_ap_settings {
 };
 #else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 /**
+ * struct cfg80211_mlo_info - MLO settings
+ *
+ * Used to configure AP MLO Interface
+ *
+ * @num_mlo_links: number of MLO links.
+ * @mlo_link_ids: Array of link ids.
+ * @mlo_mac_addrs: Array of MLO MAC address.
+ */
+#define MAX_NUM_MLO_LINKS 16
+struct cfg80211_mlo_info {
+	u8 num_mlo_links;
+	u32 mlo_link_ids[MAX_NUM_MLO_LINKS];
+	struct mac_address mlo_mac_addrs[MAX_NUM_MLO_LINKS];
+};
+
+/**
  * struct cfg80211_ap_settings - AP configuration
  *
  * Used to configure an AP interface.
@@ -1588,6 +1604,7 @@ struct cfg80211_ap_settings {
  * @fils_discovery: FILS discovery transmission parameters
  * @unsol_bcast_probe_resp: Unsolicited broadcast probe response parameters
  * @mbssid_config: AP settings for multiple bssid
+ * @mlo_info: MLO settings
  */
 struct cfg80211_ap_settings {
 	struct cfg80211_chan_def chandef;
@@ -1621,6 +1638,7 @@ struct cfg80211_ap_settings {
 	struct cfg80211_unsol_bcast_probe_resp unsol_bcast_probe_resp;
 	struct cfg80211_mbssid_config mbssid_config;
 	const struct ieee80211_eht_cap_elem *eht_cap;
+	struct cfg80211_mlo_info mlo_info;
 };
 #endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
