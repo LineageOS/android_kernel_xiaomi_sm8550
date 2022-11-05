@@ -1611,7 +1611,7 @@ void cfg80211_autodisconnect_wk(struct work_struct *work)
 			break;
 		case NL80211_IFTYPE_AP:
 		case NL80211_IFTYPE_P2P_GO:
-			__cfg80211_stop_ap(rdev, wdev->netdev, -1, false);
+			__cfg80211_stop_ap(rdev, wdev->netdev, -1, false, NULL);
 			break;
 		case NL80211_IFTYPE_MESH_POINT:
 			__cfg80211_leave_mesh(rdev, wdev->netdev);

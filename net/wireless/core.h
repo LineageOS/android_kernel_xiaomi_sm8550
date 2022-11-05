@@ -383,10 +383,10 @@ int cfg80211_leave_ocb(struct cfg80211_registered_device *rdev,
 /* AP */
 int __cfg80211_stop_ap(struct cfg80211_registered_device *rdev,
 		       struct net_device *dev, int link,
-		       bool notify);
+		       bool notify, struct genl_info *info);
 int cfg80211_stop_ap(struct cfg80211_registered_device *rdev,
 		     struct net_device *dev, int link,
-		     bool notify);
+		     bool notify, struct genl_info *info);
 
 /* MLME */
 int cfg80211_mlme_auth(struct cfg80211_registered_device *rdev,

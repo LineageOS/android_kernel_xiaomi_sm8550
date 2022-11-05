@@ -2366,8 +2366,13 @@ static int cfg80211_rtw_change_beacon(struct wiphy *wiphy, struct net_device *nd
 	return rtw_add_beacon(adapter, info->head, info->head_len, info->tail, info->tail_len);
 }
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 static int cfg80211_rtw_stop_ap(struct wiphy *wiphy, struct net_device *ndev,
 				unsigned int link_id)
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+static int cfg80211_rtw_stop_ap(struct wiphy *wiphy, struct net_device *ndev,
+				struct cfg80211_ap_settings *settings)
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 {
 	return 0;
 }

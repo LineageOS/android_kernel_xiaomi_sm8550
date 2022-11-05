@@ -1060,7 +1060,7 @@ int cfg80211_change_iface(struct cfg80211_registered_device *rdev,
 		switch (otype) {
 		case NL80211_IFTYPE_AP:
 		case NL80211_IFTYPE_P2P_GO:
-			cfg80211_stop_ap(rdev, dev, -1, true);
+			cfg80211_stop_ap(rdev, dev, -1, true, NULL);
 			break;
 		case NL80211_IFTYPE_ADHOC:
 			cfg80211_leave_ibss(rdev, dev, false);
@@ -2471,7 +2471,7 @@ void cfg80211_remove_link(struct wireless_dev *wdev, unsigned int link_id)
 	switch (wdev->iftype) {
 	case NL80211_IFTYPE_AP:
 	case NL80211_IFTYPE_P2P_GO:
-		__cfg80211_stop_ap(rdev, wdev->netdev, link_id, true);
+		__cfg80211_stop_ap(rdev, wdev->netdev, link_id, true, NULL);
 		break;
 	default:
 		/* per-link not relevant */

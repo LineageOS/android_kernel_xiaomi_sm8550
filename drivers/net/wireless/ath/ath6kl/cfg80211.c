@@ -2973,8 +2973,13 @@ static int ath6kl_change_beacon(struct wiphy *wiphy, struct net_device *dev,
 	return ath6kl_set_ies(vif, beacon);
 }
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 static int ath6kl_stop_ap(struct wiphy *wiphy, struct net_device *dev,
 			  unsigned int link_id)
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+static int ath6kl_stop_ap(struct wiphy *wiphy, struct net_device *dev,
+			  struct cfg80211_ap_settings *settings)
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 {
 	struct ath6kl *ar = ath6kl_priv(dev);
 	struct ath6kl_vif *vif = netdev_priv(dev);

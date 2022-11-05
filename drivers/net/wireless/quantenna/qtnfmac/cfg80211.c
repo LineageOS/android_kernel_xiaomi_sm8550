@@ -352,8 +352,13 @@ static int qtnf_start_ap(struct wiphy *wiphy, struct net_device *dev,
 	return ret;
 }
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 static int qtnf_stop_ap(struct wiphy *wiphy, struct net_device *dev,
 			unsigned int link_id)
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+static int qtnf_stop_ap(struct wiphy *wiphy, struct net_device *dev,
+			struct cfg80211_ap_settings *settings)
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 {
 	struct qtnf_vif *vif = qtnf_netdev_get_priv(dev);
 	int ret;

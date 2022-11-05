@@ -4963,8 +4963,13 @@ exit:
 	return err;
 }
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 static int brcmf_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *ndev,
 				  unsigned int link_id)
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+static int brcmf_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *ndev,
+				  struct cfg80211_ap_settings *settings)
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 {
 	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
 	struct brcmf_if *ifp = netdev_priv(ndev);

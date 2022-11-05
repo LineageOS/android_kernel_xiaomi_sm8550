@@ -1409,8 +1409,13 @@ static int change_beacon(struct wiphy *wiphy, struct net_device *dev,
 	return wilc_add_beacon(vif, 0, 0, beacon);
 }
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 static int stop_ap(struct wiphy *wiphy, struct net_device *dev,
 		   unsigned int link_id)
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+static int stop_ap(struct wiphy *wiphy, struct net_device *dev,
+		   struct cfg80211_ap_settings *settings)
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 {
 	int ret;
 	struct wilc_vif *vif = netdev_priv(dev);
