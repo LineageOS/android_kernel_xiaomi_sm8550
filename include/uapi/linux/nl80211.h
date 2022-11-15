@@ -57,6 +57,9 @@
 #define NL80211_EDMG_CHANNELS_MIN	1
 #define NL80211_EDMG_CHANNELS_MAX	0x3c /* 0b00111100 */
 
+#define NL80211_MLD_MAX_NUM_LINKS	15 /* Max Num of MLD Links */
+#define NL80211_MLO_INVALID_LINK_ID	-1
+
 /**
  * DOC: Station handling
  *

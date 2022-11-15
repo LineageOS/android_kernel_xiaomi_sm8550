@@ -977,10 +977,18 @@ void cfg80211_process_wdev_events(struct wireless_dev *wdev)
 			__cfg80211_roamed(wdev, &ev->rm);
 			break;
 		case EVENT_DISCONNECTED:
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 			__cfg80211_disconnected(wdev->netdev,
 						ev->dc.ie, ev->dc.ie_len,
 						ev->dc.reason,
 						!ev->dc.locally_generated);
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+			__cfg80211_disconnected(wdev->netdev,
+						ev->dc.ie, ev->dc.ie_len,
+						ev->dc.reason,
+						!ev->dc.locally_generated,
+						ev->dc.link_id);
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 			break;
 		case EVENT_IBSS_JOINED:
 			__cfg80211_ibss_joined(wdev->netdev, ev->ij.bssid,

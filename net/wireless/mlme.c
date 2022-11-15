@@ -117,7 +117,12 @@ static void cfg80211_process_deauth(struct wireless_dev *wdev,
 	if (!wdev->connected || !ether_addr_equal(wdev->u.client.connected_addr, bssid))
 		return;
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	__cfg80211_disconnected(wdev->netdev, NULL, 0, reason_code, from_ap);
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+	__cfg80211_disconnected(wdev->netdev, NULL, 0, reason_code, from_ap,
+				NL80211_MLO_INVALID_LINK_ID);
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 	cfg80211_sme_deauth(wdev);
 }
 
@@ -138,7 +143,12 @@ static void cfg80211_process_disassoc(struct wireless_dev *wdev,
 		    !ether_addr_equal(wdev->u.client.connected_addr, bssid)))
 		return;
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	__cfg80211_disconnected(wdev->netdev, NULL, 0, reason_code, from_ap);
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+	__cfg80211_disconnected(wdev->netdev, NULL, 0, reason_code, from_ap,
+				NL80211_MLO_INVALID_LINK_ID);
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 	cfg80211_sme_disassoc(wdev);
 }
 
