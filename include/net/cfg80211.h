@@ -1532,7 +1532,9 @@ struct cfg80211_ap_settings {
 	struct cfg80211_fils_discovery fils_discovery;
 	struct cfg80211_unsol_bcast_probe_resp unsol_bcast_probe_resp;
 	struct cfg80211_mbssid_config mbssid_config;
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	u16 punct_bitmap;
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	ANDROID_BACKPORT_RESERVED(1);
 	ANDROID_BACKPORT_RESERVED(2);
@@ -1674,7 +1676,9 @@ struct cfg80211_csa_settings {
 	bool radar_required;
 	bool block_tx;
 	u8 count;
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	u16 punct_bitmap;
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	ANDROID_BACKPORT_RESERVED(1);
 	ANDROID_BACKPORT_RESERVED(2);
