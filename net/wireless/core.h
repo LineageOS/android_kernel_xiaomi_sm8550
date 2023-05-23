@@ -298,6 +298,8 @@ struct cfg80211_event {
 		} ij;
 		struct {
 			u8 bssid[ETH_ALEN];
+			const u8 *td_bitmap;
+			u8 td_bitmap_len;
 		} pa;
 	};
 };
