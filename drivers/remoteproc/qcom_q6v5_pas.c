@@ -139,6 +139,11 @@ static ssize_t txn_id_show(struct device *dev, struct device_attribute *attr, ch
 }
 static DEVICE_ATTR_RO(txn_id);
 
+static inline bool is_mss_ssr_hyp_assign_en(const struct adsp_data *desc)
+{
+	return (desc->needs_dsm_mem_setup && !strcmp(desc->firmware_name, "modem.mdt"));
+}
+
 void adsp_segment_dump(struct rproc *rproc, struct rproc_dump_segment *segment,
 		     void *dest, size_t offset, size_t size)
 {
@@ -1084,6 +1089,43 @@ static int setup_mpss_dsm_mem(struct platform_device *pdev)
 	return 0;
 }
 
+static int qcom_rproc_adsp_driver_freeze(struct device *dev)
+{
+	const struct adsp_data *desc;
+
+	desc = of_device_get_match_data(dev);
+
+	if (is_mss_ssr_hyp_assign_en(desc) && mpss_dsm_mem_setup)
+		mpss_dsm_mem_setup = false;
+
+	return 0;
+}
+
+static int qcom_rproc_adsp_driver_restore(struct device *dev)
+{
+	const struct adsp_data *desc;
+	int ret;
+
+	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
+
+	desc = of_device_get_match_data(dev);
+
+	if (is_mss_ssr_hyp_assign_en(desc) && !mpss_dsm_mem_setup) {
+		ret = setup_mpss_dsm_mem(pdev);
+		if (ret) {
+			dev_err(dev, "failed to setup mpss dsm mem\n");
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+static const struct dev_pm_ops rproc_adsp_pm_ops = {
+	.freeze = qcom_rproc_adsp_driver_freeze,
+	.restore = qcom_rproc_adsp_driver_restore,
+};
+
 static int adsp_probe(struct platform_device *pdev)
 {
 	const struct adsp_data *desc;
@@ -1108,8 +1150,7 @@ static int adsp_probe(struct platform_device *pdev)
 	if (ret < 0 && ret != -EINVAL)
 		return ret;
 
-	if (desc->needs_dsm_mem_setup && !mpss_dsm_mem_setup &&
-			!strcmp(fw_name, "modem.mdt")) {
+	if (is_mss_ssr_hyp_assign_en(desc)) {
 		ret = setup_mpss_dsm_mem(pdev);
 		if (ret) {
 			dev_err(&pdev->dev, "failed to setup mpss dsm mem\n");
@@ -2196,6 +2237,7 @@ static struct platform_driver adsp_driver = {
 	.driver = {
 		.name = "qcom_q6v5_pas",
 		.of_match_table = adsp_of_match,
+		.pm = &rproc_adsp_pm_ops,
 	},
 };
 
