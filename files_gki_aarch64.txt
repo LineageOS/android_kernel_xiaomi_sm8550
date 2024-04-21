@@ -1428,6 +1428,7 @@ drivers/pinctrl/sunxi/pinctrl-sun50i-h616.c
 drivers/pinctrl/sunxi/pinctrl-sun50i-h616-r.c
 drivers/pinctrl/sunxi/pinctrl-sunxi.c
 drivers/pinctrl/sunxi/pinctrl-sunxi.h
+drivers/powercap/idle_inject.c
 drivers/powercap/powercap_sys.c
 drivers/power/reset/hisi-reboot.c
 drivers/power/reset/syscon-reboot.c
@@ -1555,6 +1556,7 @@ drivers/staging/android/debug_kinfo.c
 drivers/staging/android/debug_kinfo.h
 drivers/staging/android/uapi/ashmem.h
 drivers/thermal/cpufreq_cooling.c
+drivers/thermal/cpuidle_cooling.c
 drivers/thermal/devfreq_cooling.c
 drivers/thermal/gov_power_allocator.c
 drivers/thermal/gov_step_wise.c
@@ -1784,7 +1786,6 @@ drivers/usb/typec/mux.c
 drivers/usb/typec/mux.h
 drivers/usb/typec/port-mapper.c
 drivers/usb/typec/tcpm/tcpci.c
-drivers/usb/typec/tcpm/tcpci.h
 drivers/usb/typec/tcpm/tcpm.c
 drivers/usb/typec/ucsi/psy.c
 drivers/usb/typec/ucsi/trace.c
@@ -2250,7 +2251,6 @@ include/asm-generic/bitops/non-atomic.h
 include/asm-generic/bitops/sched.h
 include/asm-generic/bitsperlong.h
 include/asm-generic/bug.h
-include/asm-generic/bugs.h
 include/asm-generic/cacheflush.h
 include/asm-generic/checksum.h
 include/asm-generic/compat.h
@@ -2831,6 +2831,7 @@ include/linux/i3c/master.h
 include/linux/i8042.h
 include/linux/icmp.h
 include/linux/icmpv6.h
+include/linux/idle_inject.h
 include/linux/idr.h
 include/linux/ieee80211.h
 include/linux/ieee802154.h
@@ -3579,6 +3580,7 @@ include/linux/usb/quirks.h
 include/linux/usb/r8152.h
 include/linux/usb/role.h
 include/linux/usb/storage.h
+include/linux/usb/tcpci.h
 include/linux/usb/tcpm.h
 include/linux/usb/typec_altmode.h
 include/linux/usb/typec_dp.h
@@ -4069,6 +4071,7 @@ include/trace/hooks/cpuidle.h
 include/trace/hooks/cpuidle_psci.h
 include/trace/hooks/creds.h
 include/trace/hooks/debug.h
+include/trace/hooks/delayacct.h
 include/trace/hooks/direct_io.h
 include/trace/hooks/dmabuf.h
 include/trace/hooks/dm.h
@@ -4698,6 +4701,7 @@ kernel/configs.c
 kernel/cpu.c
 kernel/cpu_pm.c
 kernel/cred.c
+kernel/delayacct.c
 kernel/dma/coherent.c
 kernel/dma/contiguous.c
 kernel/dma/debug.h

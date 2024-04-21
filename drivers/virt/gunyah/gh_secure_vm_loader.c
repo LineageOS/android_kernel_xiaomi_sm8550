@@ -57,6 +57,8 @@ const static struct {
 	{GH_TRUSTED_VM, "trustedvm"},
 	{GH_CPUSYS_VM, "cpusys_vm"},
 	{GH_OEM_VM, "oemvm"},
+	{GH_ROBOTICS_VM1, "roboticsvm1"},
+	{GH_ROBOTICS_VM2, "roboticsvm2"},
 };
 
 static DEFINE_SPINLOCK(gh_sec_vm_lock);

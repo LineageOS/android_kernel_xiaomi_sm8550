@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk-provider.h>
@@ -299,6 +299,9 @@ static int video_cc_sm8150_probe(struct platform_device *pdev)
 
 	/* Keep VIDEO_CC_XO_CLK ALWAYS-ON */
 	regmap_update_bits(regmap, 0x984, 0x1, 0x1);
+
+	video_cc_sm8150_desc.gdscs = NULL;
+	video_cc_sm8150_desc.num_gdscs = 0;
 
 	ret = qcom_cc_really_probe(pdev, &video_cc_sm8150_desc, regmap);
 	if (ret) {

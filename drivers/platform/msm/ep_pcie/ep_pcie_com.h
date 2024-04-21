@@ -150,6 +150,7 @@
 #define PCIE20_TRGT_MAP_CTRL_OFF       0x81C
 #define PCIE20_MISC_CONTROL_1          0x8BC
 
+#define PCIE20_SYSTEM_PAGE_SIZE_REG	0x20
 #define PCIE20_SRIOV_BAR_OFF(n)        (n * 0x4)
 #define PCIE20_SRIOV_BAR(n)            (PCIE20_SRIOV_BAR_OFF(n) + 0x24)
 #define PCIE20_TOTAL_VFS_INITIAL_VFS_REG 0xC
@@ -426,7 +427,6 @@ struct ep_pcie_dev_t {
 	bool			     mhi_soc_reset_en;
 	bool			     aoss_rst_clear;
 	bool			     avoid_reboot_in_d3hot;
-	bool			     dma_wake;
 	u32                          dbi_base_reg;
 	u32                          slv_space_reg;
 	u32                          phy_status_reg;

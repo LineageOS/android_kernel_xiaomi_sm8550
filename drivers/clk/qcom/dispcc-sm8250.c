@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2020, 2022, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk-provider.h>
@@ -1715,6 +1715,11 @@ static int disp_cc_sm8250_fixup(struct platform_device *pdev,
 		disp_cc_mdss_edp_pixel_clk_src.clkr.vdd_data.rate_max[VDD_LOWER] = 337500;
 		disp_cc_mdss_edp_pixel_clk_src.clkr.vdd_data.rate_max[VDD_LOW_L1] = 371500;
 		disp_cc_mdss_edp_pixel_clk_src.clkr.vdd_data.rate_max[VDD_NOMINAL] = 675000;
+	}
+
+	if (of_device_is_compatible(pdev->dev.of_node, "qcom,sm8150-dispcc")) {
+		disp_cc_sm8250_desc.gdscs = NULL;
+		disp_cc_sm8250_desc.num_gdscs = 0;
 	}
 
 	return 0;
