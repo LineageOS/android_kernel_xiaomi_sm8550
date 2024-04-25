@@ -1960,10 +1960,14 @@ static void msm_geni_deallocate_chan(struct uart_port *uport)
 {
 	struct msm_geni_serial_port *msm_port = GET_DEV_PORT(uport);
 
-	dma_release_channel(msm_port->gsi->rx_c);
-	dma_release_channel(msm_port->gsi->tx_c);
-	msm_port->gsi->rx_c = NULL;
-	msm_port->gsi->tx_c = NULL;
+	if (msm_port->gsi->rx_c) {
+		dma_release_channel(msm_port->gsi->rx_c);
+		msm_port->gsi->rx_c = NULL;
+	}
+	if (msm_port->gsi->tx_c) {
+		dma_release_channel(msm_port->gsi->tx_c);
+		msm_port->gsi->tx_c = NULL;
+	}
 }
 
 static int msm_geni_allocate_chan(struct uart_port *uport)
@@ -1991,6 +1995,7 @@ static int msm_geni_allocate_chan(struct uart_port *uport)
 		if (ret) {
 			dev_err(uport->dev, "Failed to Config Rx\n");
 			dma_release_channel(msm_port->gsi->rx_c);
+			msm_port->gsi->rx_c = NULL;
 			goto out;
 		}
 	}
@@ -2002,8 +2007,10 @@ static int msm_geni_allocate_chan(struct uart_port *uport)
 		if (!msm_port->gsi->tx_c) {
 			dev_err(uport->dev, "%s:Failed to allocate TX slv ch\n",
 				__func__);
-			dma_release_channel(msm_port->gsi->rx_c);
-			msm_port->gsi->rx_c = NULL;
+			if (msm_port->gsi->rx_c) {
+				dma_release_channel(msm_port->gsi->rx_c);
+				msm_port->gsi->rx_c = NULL;
+			}
 			ret = -EIO;
 			goto out;
 		}
