@@ -951,6 +951,7 @@ int tc956x_print_debug_regs(struct net_device *net_device, struct tc956x_regs *r
 extern unsigned int mac0_force_speed_mode;
 extern unsigned int mac1_force_speed_mode;
 
+#ifdef CONFIG_DEBUG_FS
 static DEFINE_SPINLOCK(reg_dump_lock);
 static void dump_all_reg(struct tc956xmac_priv *priv)
 {
@@ -1021,7 +1022,6 @@ static void dump_all_reg(struct tc956xmac_priv *priv)
 	spin_unlock_irqrestore(&reg_dump_lock, flags);
 }
 
-#ifdef CONFIG_DEBUG_FS
 /**
  * read_tc956x_status() - Debugfs read command for m3 status info
  *
