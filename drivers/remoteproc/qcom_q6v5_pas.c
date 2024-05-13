@@ -60,6 +60,7 @@ struct adsp_data {
 	bool free_after_auth_reset;
 	unsigned int minidump_id;
 	bool uses_elf64;
+	bool has_xo_clk;
 	bool has_aggre2_clk;
 	bool auto_boot;
 	bool dma_phys_below_32b;
@@ -106,6 +107,7 @@ struct qcom_adsp {
 	bool retry_shutdown;
 	struct icc_path *bus_client;
 	int crash_reason_smem;
+	bool has_xo_clk;
 	bool has_aggre2_clk;
 	bool dma_phys_below_32b;
 	const char *info_name;
@@ -541,7 +543,7 @@ static int adsp_start(struct rproc *rproc)
 		}
 	}
 
-	if (!timeout_disabled) {
+	if (!timeout_disabled && adsp->q6v5.ready_irq != -ENXIO) {
 		ret = qcom_q6v5_wait_for_start(&adsp->q6v5, msecs_to_jiffies(5000));
 		if (rproc->recovery_disabled && ret)
 			panic("Panicking, remoteproc %s failed to bootup.\n", adsp->rproc->name);
@@ -754,7 +756,7 @@ begin_attach:
 		goto disable_regs;
 	}
 
-	if (!timeout_disabled) {
+	if (!timeout_disabled && adsp->q6v5.ready_irq != -ENXIO) {
 		ret = qcom_q6v5_wait_for_start(&adsp->q6v5, msecs_to_jiffies(5000));
 		if (rproc->recovery_disabled && ret) {
 			panic("Panicking, remoteproc %s failed to bootup.\n", adsp->rproc->name);
@@ -832,12 +834,15 @@ static int adsp_init_clock(struct qcom_adsp *adsp)
 {
 	int ret;
 
-	adsp->xo = devm_clk_get(adsp->dev, "xo");
-	if (IS_ERR(adsp->xo)) {
-		ret = PTR_ERR(adsp->xo);
-		if (ret != -EPROBE_DEFER)
-			dev_err(adsp->dev, "failed to get xo clock");
-		return ret;
+	if (adsp->has_xo_clk) {
+		adsp->xo = devm_clk_get(adsp->dev, "xo");
+		if (IS_ERR(adsp->xo)) {
+			ret = PTR_ERR(adsp->xo);
+			if (ret != -EPROBE_DEFER)
+				dev_err(adsp->dev,
+					"failed to get xo clock\n");
+			return ret;
+		}
 	}
 
 	if (adsp->has_aggre2_clk) {
@@ -1143,6 +1148,7 @@ static int adsp_probe(struct platform_device *pdev)
 	ret = qcom_rproc_alloc_dtb_firmware(adsp, desc->dtb_firmware_name);
 	if (ret)
 		goto free_rproc;
+	adsp->has_xo_clk = desc->has_xo_clk;
 	adsp->has_aggre2_clk = desc->has_aggre2_clk;
 	adsp->info_name = desc->sysmon_name;
 	adsp->qmp_name = desc->qmp_name;
@@ -1284,6 +1290,7 @@ static const struct adsp_data adsp_resource_init = {
 		.crash_reason_smem = 423,
 		.firmware_name = "adsp.mdt",
 		.pas_id = 1,
+		.has_xo_clk = true,
 		.has_aggre2_clk = false,
 		.auto_boot = true,
 		.ssr_name = "lpass",
@@ -1297,6 +1304,7 @@ static const struct adsp_data sm8150_adsp_resource = {
 		.pas_id = 1,
 		.minidump_id = 5,
 		.uses_elf64 = true,
+		.has_xo_clk = true,
 		.has_aggre2_clk = false,
 		.auto_boot = true,
 		.ssr_name = "lpass",
@@ -1310,6 +1318,7 @@ static const struct adsp_data sm8150_mpss_resource = {
 	.firmware_name = "modem.mdt",
 	.pas_id = 4,
 	.minidump_id = 3,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "mpss",
@@ -1322,6 +1331,7 @@ static const struct adsp_data sm8250_adsp_resource = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.active_pd_names = (char*[]){
@@ -1342,6 +1352,7 @@ static const struct adsp_data sm8350_adsp_resource = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.active_pd_names = (char*[]){
@@ -1364,6 +1375,7 @@ static const struct adsp_data waipio_adsp_resource = {
 	.pas_id = 1,
 	.minidump_id = 5,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "lpass",
@@ -1380,6 +1392,7 @@ static const struct adsp_data kalama_adsp_resource = {
 	.dtb_pas_id = 0x24,
 	.minidump_id = 5,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "lpass",
@@ -1396,6 +1409,7 @@ static const struct adsp_data crow_adsp_resource = {
 	.dtb_pas_id = 0x24,
 	.minidump_id = 5,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "lpass",
@@ -1408,6 +1422,7 @@ static const struct adsp_data khaje_adsp_resource = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
+	.has_xo_clk = true,
 	.minidump_id = 5,
 	.uses_elf64 = false,
 	.ssr_name = "lpass",
@@ -1419,6 +1434,7 @@ static const struct adsp_data bengal_adsp_resource = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
+	.has_xo_clk = true,
 	.minidump_id = 5,
 	.uses_elf64 = false,
 	.ssr_name = "lpass",
@@ -1430,6 +1446,7 @@ static const struct adsp_data qcs605_adsp_resource = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
+	.has_xo_clk = true,
 	.minidump_id = 5,
 	.uses_elf64 = false,
 	.ssr_name = "lpass",
@@ -1442,6 +1459,7 @@ static const struct adsp_data msm8998_adsp_resource = {
 		.crash_reason_smem = 423,
 		.firmware_name = "adsp.mdt",
 		.pas_id = 1,
+		.has_xo_clk = true,
 		.has_aggre2_clk = false,
 		.auto_boot = true,
 		.proxy_pd_names = (char*[]){
@@ -1457,6 +1475,7 @@ static const struct adsp_data cdsp_resource_init = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "cdsp",
@@ -1468,6 +1487,7 @@ static const struct adsp_data sm8150_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "cdsp",
@@ -1480,6 +1500,7 @@ static const struct adsp_data sm8250_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.active_pd_names = (char*[]){
@@ -1499,6 +1520,7 @@ static const struct adsp_data sm8350_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.active_pd_names = (char*[]){
@@ -1519,6 +1541,7 @@ static const struct adsp_data waipio_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.minidump_id = 7,
 	.uses_elf64 = true,
 	.has_aggre2_clk = false,
@@ -1534,6 +1557,7 @@ static const struct adsp_data kalama_cdsp_resource = {
 	.firmware_name = "cdsp.mdt",
 	.dtb_firmware_name = "cdsp_dtb.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.dtb_pas_id = 0x25,
 	.minidump_id = 7,
 	.uses_elf64 = true,
@@ -1550,6 +1574,7 @@ static const struct adsp_data crow_cdsp_resource = {
 	.firmware_name = "cdsp.mdt",
 	.dtb_firmware_name = "cdsp_dtb.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.dtb_pas_id = 0x25,
 	.minidump_id = 7,
 	.uses_elf64 = true,
@@ -1565,6 +1590,7 @@ static const struct adsp_data khaje_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.minidump_id = 7,
 	.uses_elf64 = false,
 	.ssr_name = "cdsp",
@@ -1576,6 +1602,7 @@ static const struct adsp_data bengal_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.minidump_id = 7,
 	.uses_elf64 = false,
 	.ssr_name = "cdsp",
@@ -1587,6 +1614,7 @@ static const struct adsp_data qcs605_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.minidump_id = 7,
 	.uses_elf64 = false,
 	.ssr_name = "cdsp",
@@ -1600,6 +1628,7 @@ static const struct adsp_data mpss_resource_init = {
 	.firmware_name = "modem.mdt",
 	.pas_id = 4,
 	.minidump_id = 3,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.active_pd_names = (char*[]){
@@ -1623,6 +1652,7 @@ static const struct adsp_data waipio_mpss_resource = {
 	.free_after_auth_reset = true,
 	.minidump_id = 3,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "mpss",
@@ -1640,6 +1670,7 @@ static const struct adsp_data kalama_mpss_resource = {
 	.free_after_auth_reset = true,
 	.minidump_id = 3,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.needs_dsm_mem_setup = true,
@@ -1657,6 +1688,7 @@ static const struct adsp_data crow_mpss_resource = {
 	.free_after_auth_reset = true,
 	.minidump_id = 3,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "mpss",
@@ -1675,6 +1707,7 @@ static const struct adsp_data cinder_mpss_resource = {
 	.free_after_auth_reset = true,
 	.minidump_id = 3,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "mpss",
@@ -1691,6 +1724,7 @@ static const struct adsp_data khaje_mpss_resource = {
 	.free_after_auth_reset = true,
 	.minidump_id = 3,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.ssr_name = "mpss",
 	.sysmon_name = "modem",
 	.ssctl_id = 0x12,
@@ -1703,6 +1737,7 @@ static const struct adsp_data bengal_mpss_resource = {
 	.free_after_auth_reset = true,
 	.minidump_id = 3,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.ssr_name = "mpss",
 	.sysmon_name = "modem",
 	.ssctl_id = 0x12,
@@ -1712,6 +1747,7 @@ static const struct adsp_data slpi_resource_init = {
 		.crash_reason_smem = 424,
 		.firmware_name = "slpi.mdt",
 		.pas_id = 12,
+		.has_xo_clk = true,
 		.has_aggre2_clk = true,
 		.auto_boot = true,
 		.ssr_name = "dsps",
@@ -1723,6 +1759,7 @@ static const struct adsp_data sm8150_slpi_resource = {
 		.crash_reason_smem = 424,
 		.firmware_name = "slpi.mdt",
 		.pas_id = 12,
+		.has_xo_clk = true,
 		.has_aggre2_clk = false,
 		.auto_boot = true,
 		.active_pd_names = (char*[]){
@@ -1743,6 +1780,7 @@ static const struct adsp_data sm8250_slpi_resource = {
 	.crash_reason_smem = 424,
 	.firmware_name = "slpi.mdt",
 	.pas_id = 12,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.active_pd_names = (char*[]){
@@ -1763,6 +1801,7 @@ static const struct adsp_data sm8350_slpi_resource = {
 	.crash_reason_smem = 424,
 	.firmware_name = "slpi.mdt",
 	.pas_id = 12,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.active_pd_names = (char*[]){
@@ -1783,6 +1822,7 @@ static const struct adsp_data waipio_slpi_resource = {
 	.crash_reason_smem = 424,
 	.firmware_name = "slpi.mdt",
 	.pas_id = 12,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "dsps",
@@ -1795,6 +1835,7 @@ static const struct adsp_data msm8998_slpi_resource = {
 		.crash_reason_smem = 424,
 		.firmware_name = "slpi.mdt",
 		.pas_id = 12,
+		.has_xo_clk = true,
 		.has_aggre2_clk = true,
 		.auto_boot = true,
 		.proxy_pd_names = (char*[]){
@@ -1810,6 +1851,7 @@ static const struct adsp_data wcss_resource_init = {
 	.crash_reason_smem = 421,
 	.firmware_name = "wcnss.mdt",
 	.pas_id = 6,
+	.has_xo_clk = true,
 	.auto_boot = true,
 	.ssr_name = "mpss",
 	.sysmon_name = "wcnss",
@@ -1820,6 +1862,7 @@ static const struct adsp_data sdx55_mpss_resource = {
 	.crash_reason_smem = 421,
 	.firmware_name = "modem.mdt",
 	.pas_id = 4,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.proxy_pd_names = (char*[]){
@@ -1836,6 +1879,7 @@ static const struct adsp_data sc8180x_mpss_resource = {
 	.crash_reason_smem = 421,
 	.firmware_name = "modem.mdt",
 	.pas_id = 4,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.active_pd_names = (char*[]){
@@ -1855,6 +1899,7 @@ static const struct adsp_data sdmshrike_adsp_resource = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "lpass",
@@ -1867,6 +1912,7 @@ static const struct adsp_data sdmshrike_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "lpass",
@@ -1882,6 +1928,7 @@ static const struct adsp_data scuba_auto_mpss_resource = {
         .free_after_auth_reset = true,
         .minidump_id = 3,
         .uses_elf64 = true,
+	.has_xo_clk = true,
         .has_aggre2_clk = false,
         .auto_boot = false,
         .ssr_name = "mpss",
@@ -1895,6 +1942,7 @@ static const struct adsp_data monaco_adsp_resource = {
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
 	.minidump_id = 5,
+	.has_xo_clk = true,
 	.uses_elf64 = false,
 	.ssr_name = "lpass",
 	.sysmon_name = "adsp",
@@ -1907,6 +1955,7 @@ static const struct adsp_data monaco_modem_resource = {
 	.pas_id = 4,
 	.free_after_auth_reset = true,
 	.minidump_id = 3,
+	.has_xo_clk = true,
 	.uses_elf64 = true,
 	.ssr_name = "mpss",
 	.sysmon_name = "modem",
@@ -1920,6 +1969,7 @@ static const struct adsp_data scuba_auto_lpass_resource = {
 	.free_after_auth_reset = true,
 	.minidump_id = 5,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "lpass",
@@ -1933,6 +1983,7 @@ static const struct adsp_data lemans_adsp_resource = {
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "lpass",
@@ -1947,6 +1998,7 @@ static const struct adsp_data lemans_cdsp_resource = {
 	.firmware_name = "cdsp0.mdt",
 	.pas_id = 18,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "cdsp",
@@ -1961,6 +2013,7 @@ static const struct adsp_data lemans_cdsp1_resource = {
 	.firmware_name = "cdsp1.mdt",
 	.pas_id = 30,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "cdsp1",
@@ -1975,6 +2028,7 @@ static const struct adsp_data lemans_gpdsp0_resource = {
 	.firmware_name = "gpdsp0.mdt",
 	.pas_id = 39,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "gpdsp0",
@@ -1989,6 +2043,7 @@ static const struct adsp_data lemans_gpdsp1_resource = {
 	.firmware_name = "gpdsp1.mdt",
 	.pas_id = 40,
 	.uses_elf64 = true,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "gpdsp1",
@@ -2002,6 +2057,7 @@ static const struct adsp_data kona_adsp_resource = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "lpass",
@@ -2014,6 +2070,7 @@ static const struct adsp_data kona_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "cdsp",
@@ -2026,6 +2083,7 @@ static const struct adsp_data kona_slpi_resource = {
 	.crash_reason_smem = 424,
 	.firmware_name = "slpi.mdt",
 	.pas_id = 12,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "dsps",
@@ -2034,11 +2092,22 @@ static const struct adsp_data kona_slpi_resource = {
 	.ssctl_id = 0x16,
 };
 
+static const struct adsp_data kona_npu_resource = {
+	.firmware_name = "npu.mdt",
+	.pas_id = 23,
+	.has_xo_clk = false,
+	.has_aggre2_clk = false,
+	.ssr_name = "npu",
+	.sysmon_name = "npu",
+	.ssctl_id = -EINVAL,
+};
+
 static const struct adsp_data crow_wpss_resource = {
 	.crash_reason_smem = 626,
 	.firmware_name = "wpss.mdt",
 	.pas_id = 6,
 	.minidump_id = 4,
+	.has_xo_clk = true,
 	.uses_elf64 = true,
 	.ssr_name = "wpss",
 	.sysmon_name = "wpss",
@@ -2050,6 +2119,7 @@ static const struct adsp_data qcs405_adsp_resource = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "lpass",
@@ -2062,6 +2132,7 @@ static const struct adsp_data qcs405_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "cdsp",
@@ -2074,6 +2145,7 @@ static const struct adsp_data qcs405_modem_resource = {
 	.crash_reason_smem = 421,
 	.firmware_name = "wcnss.mdt",
 	.pas_id = 6,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = false,
 	.ssr_name = "mpss",
@@ -2088,6 +2160,7 @@ static const struct adsp_data trinket_modem_resource = {
 	.pas_id = 4,
 	.free_after_auth_reset = true,
 	.minidump_id = 3,
+	.has_xo_clk = true,
 	.uses_elf64 = true,
 	.ssr_name = "mpss",
 	.sysmon_name = "modem",
@@ -2098,6 +2171,7 @@ static const struct adsp_data trinket_adsp_resource = {
 	.crash_reason_smem = 423,
 	.firmware_name = "adsp.mdt",
 	.pas_id = 1,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "lpass",
@@ -2110,6 +2184,7 @@ static const struct adsp_data trinket_cdsp_resource = {
 	.crash_reason_smem = 601,
 	.firmware_name = "cdsp.mdt",
 	.pas_id = 18,
+	.has_xo_clk = true,
 	.has_aggre2_clk = false,
 	.auto_boot = true,
 	.ssr_name = "cdsp",
@@ -2171,6 +2246,7 @@ static const struct of_device_id adsp_of_match[] = {
 	{ .compatible = "qcom,kona-adsp-pas", .data = &kona_adsp_resource},
 	{ .compatible = "qcom,kona-cdsp-pas", .data = &kona_cdsp_resource},
 	{ .compatible = "qcom,kona-slpi-pas", .data = &kona_slpi_resource},
+	{ .compatible = "qcom,kona-npu-pas", .data = &kona_npu_resource},
 	{ .compatible = "qcom,crow-wpss-pas", .data = &crow_wpss_resource},
 	{ .compatible = "qcom,crow-adsp-pas", .data = &crow_adsp_resource},
 	{ .compatible = "qcom,crow-cdsp-pas", .data = &crow_cdsp_resource},
