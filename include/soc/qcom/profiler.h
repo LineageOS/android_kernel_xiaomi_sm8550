@@ -11,6 +11,9 @@ Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 #define LLCC_CHANNELS 6
 #define CABO_CHANNELS 6
 #define NUM_REG_TYPES 2
+#define HF_COUNTERS 16
+#define SF_COUNTERS 12
+#define GEMNOC_COUNTERS 8
 
 /* Structure for backward compatibility. */
 struct profiler_bw_cntrs_req_m {
@@ -28,11 +31,17 @@ struct profiler_bw_cntrs_req {
 	uint32_t bwEnableFlags;
 	int llcc_values[LLCC_CHANNELS * NUM_REG_TYPES];
 	int cabo_values[CABO_CHANNELS * NUM_REG_TYPES];
+	int gemnoc_values[LLCC_CHANNELS * GEMNOC_COUNTERS];
+	int mmnoc_hf_values[HF_COUNTERS];
+	int mmnoc_sf_values[SF_COUNTERS];
 };
 
 struct reg_offset {
 	int llcc_offset[LLCC_CHANNELS * NUM_REG_TYPES];
 	int cabo_offset[CABO_CHANNELS * NUM_REG_TYPES];
+	int gemnoc_offset[LLCC_CHANNELS * GEMNOC_COUNTERS];
+	int mmnoc_hf_offset[HF_COUNTERS];
+	int mmnoc_sf_offset[SF_COUNTERS];
 };
 
 struct device_param_init {
@@ -40,6 +49,13 @@ struct device_param_init {
 	uint32_t llcc_base;
 	uint32_t llcc_map_size;
 	int num_cabo_channels;
+	int num_gemnoc_metrics;
+	uint32_t gemnoc_base;
+	uint32_t gemnoc_map_size;
+	int num_hf_metrics;
+	int num_sf_metrics;
+	uint32_t mmnoc_base;
+	uint32_t mmnoc_map_size;
 };
 
 
