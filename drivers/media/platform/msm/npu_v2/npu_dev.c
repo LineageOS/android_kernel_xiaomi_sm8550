@@ -20,7 +20,7 @@
 #include <linux/soc/qcom/cdsprm_cxlimit.h>
 #include <linux/devfreq.h>
 #include <linux/qcom_scm.h>
-
+#include <linux/remoteproc.h>
 #include "npu_common.h"
 #include "npu_hw.h"
 
@@ -101,6 +101,7 @@ static long npu_ioctl(struct file *file, unsigned int cmd,
 static int npu_parse_dt_clock(struct npu_device *npu_dev);
 static int npu_parse_dt_regulator(struct npu_device *npu_dev);
 static int npu_parse_dt_bw(struct npu_device *npu_dev);
+static int npu_parse_dt_rproc(struct npu_device *npu_dev);
 static int npu_of_parse_pwrlevels(struct npu_device *npu_dev,
 		struct device_node *node);
 static int npu_pwrctrl_init(struct npu_device *npu_dev);
@@ -2355,37 +2356,6 @@ static int npu_hw_info_init(struct npu_device *npu_dev)
 	return rc;
 }
 
-static int npu_alloc_memory_region(struct npu_device *npu_dev)
-{
-	struct device *dev = &npu_dev->pdev->dev;
-	struct device_node *node;
-	struct resource r;
-	int ret;
-
-	node = of_parse_phandle(dev->of_node, "memory-region", 0);
-	if (!node) {
-		pr_err("no memory-region specified\n");
-		return -EINVAL;
-	}
-
-	ret = of_address_to_resource(node, 0, &r);
-	of_node_put(node);
-	if (ret)
-		return ret;
-
-	npu_dev->fw_io.mem_phys = npu_dev->fw_io.mem_reloc = r.start;
-	npu_dev->fw_io.mem_size = resource_size(&r);
-	npu_dev->fw_io.mem_region = devm_ioremap_wc(dev, npu_dev->fw_io.mem_phys,
-			npu_dev->fw_io.mem_size);
-	if (!npu_dev->fw_io.mem_region) {
-		pr_err("unable to map memory region: %pa+%zx\n",
-			&r.start, npu_dev->fw_io.mem_size);
-		return -EBUSY;
-	}
-
-	return 0;
-}
-
 /* -------------------------------------------------------------------------
  * Probe/Remove
  * -------------------------------------------------------------------------
@@ -2523,8 +2493,9 @@ static int npu_probe(struct platform_device *pdev)
 			res->start, npu_dev->qfprom_io.base);
 	}
 
-	if (npu_alloc_memory_region(npu_dev)) {
-		rc = -ENOMEM;
+	rc = npu_parse_dt_rproc(npu_dev);
+	if (rc) {
+		NPU_ERR("failed parse dt rproc\n");
 		goto error_get_dev_num;
 	}
 
@@ -2645,6 +2616,20 @@ error_class_create:
 error_get_dev_num:
 	dev_set_drvdata(&pdev->dev, NULL);
 	return rc;
+}
+
+static int npu_parse_dt_rproc(struct npu_device *npu_dev)
+{
+	struct platform_device *pdev = npu_dev->pdev;
+	int rc = 0;
+
+	rc = of_property_read_u32(pdev->dev.of_node, "qcom,rproc-handle",
+				&npu_dev->rproc_phandle);
+	if (rc) {
+		NPU_ERR("get rproc-handle from dt failed, %d", rc);
+		return rc;
+	}
+	return 0;
 }
 
 static int npu_remove(struct platform_device *pdev)

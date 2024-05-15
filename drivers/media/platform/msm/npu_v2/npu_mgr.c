@@ -14,6 +14,7 @@
 #include "npu_host_ipc.h"
 #include "npu_common.h"
 #include <soc/qcom/subsystem_notif.h>
+#include <linux/remoteproc/qcom_rproc.h>
 #include <linux/panic_notifier.h>
 #include <linux/reboot.h>
 
@@ -122,67 +123,28 @@ static int load_fw_nolock(struct npu_device *npu_dev, bool enable)
 {
 	struct npu_host_ctx *host_ctx = &npu_dev->host_ctx;
 	int ret = 0;
-	int reg_val = 0;
 
 	if (host_ctx->fw_state != FW_UNLOADED) {
 		NPU_WARN("fw is loaded already\n");
 		return 0;
 	}
 
-	ret = npu_notify_aop(npu_dev, true);
-	if (ret) {
-		NPU_ERR("npu_notify_aop failed\n");
-		goto load_fw_fail;
-	}
-
-	ret = npu_enable_core_power(npu_dev);
-	if (ret) {
-		NPU_ERR("Enable core power failed\n");
-		goto load_fw_fail;
-	}
-
-	ret = npu_enable_sys_cache(npu_dev);
-	if (ret) {
-		NPU_ERR("Enable sys cache failed\n");
-		goto load_fw_fail;
-	}
-
+	reinit_completion(&host_ctx->npu_power_up_done);
 	/* Boot the NPU subsystem */
 	if (npu_subsystem_get(npu_dev, "npu.mdt")) {
 		NPU_ERR("pil load npu fw failed\n");
-		host_ctx->subsystem_handle = NULL;
 		ret = -ENODEV;
 		goto load_fw_fail;
 	}
 	NPU_DBG("load npu firmware success");
 
-	npu_cc_reg_write(npu_dev, NPU_CC_NPU_CPC_RSC_CTRL, 3);
-	NPU_DBG("npu_cc_reg_write");
-
-	/* Clear control/status registers */
-	REGW(npu_dev, REG_NPU_FW_CTRL_STATUS, 0x0);
-	REGW(npu_dev, REG_NPU_HOST_CTRL_VALUE, 0x0);
-	REGW(npu_dev, REG_FW_TO_HOST_EVENT, 0x0);
-	NPU_DBG("Clear control/status registers");
-
-	NPU_DBG("fw_dbg_mode %x\n", host_ctx->fw_dbg_mode);
-	reg_val = 0;
-	if (host_ctx->fw_dbg_mode & FW_DBG_MODE_PAUSE)
-		reg_val |= HOST_CTRL_STATUS_FW_PAUSE_VAL;
-
-	if (host_ctx->fw_dbg_mode & FW_DBG_DISABLE_WDOG)
-		reg_val |= HOST_CTRL_STATUS_DISABLE_WDOG_VAL;
-
-	if (!npu_hw_clk_gating_enabled())
-		reg_val |= HOST_CTRL_STATUS_BOOT_DISABLE_CLK_GATE_VAL;
-	NPU_DBG("reg_val: %x\n", reg_val);
-
-	REGW(npu_dev, REG_NPU_HOST_CTRL_STATUS, reg_val);
-	/* Read back to flush all registers for fw to read */
-	REGR(npu_dev, REG_NPU_HOST_CTRL_STATUS);
-
-	/* Initialize the host side IPC before fw boots up */
-	npu_host_ipc_pre_init(npu_dev);
+	ret = wait_for_completion_timeout(
+		&host_ctx->npu_power_up_done, NW_PWR_UP_TIMEOUT);
+	if (!ret) {
+		NPU_ERR("Wait for npu powers up timed out\n");
+		ret = -ETIMEDOUT;
+		goto load_fw_fail;
+	}
 
 	/* Keep reading ctrl status until NPU is ready */
 	ret = wait_for_status_ready(npu_dev, REG_NPU_FW_CTRL_STATUS,
@@ -235,7 +197,7 @@ load_fw_fail:
 	if (!ret) {
 		host_ctx->fw_state = FW_LOADED;
 	} else {
-		if (!IS_ERR_OR_NULL(host_ctx->subsystem_handle))
+		if (!IS_ERR_OR_NULL(host_ctx->npu_rproc_handle))
 			npu_subsystem_put(npu_dev);
 
 		host_ctx->fw_state = FW_UNLOADED;
@@ -683,7 +645,7 @@ static int npu_notifier_cb(struct notifier_block *this, unsigned long code,
 
 	NPU_DBG("notifier code %d\n", code);
 	switch (code) {
-	case SUBSYS_BEFORE_POWERUP:
+	case QCOM_SSR_BEFORE_POWERUP:
 	{
 		/*
 		 * Prepare for loading fw via pil
@@ -730,9 +692,9 @@ static int npu_notifier_cb(struct notifier_block *this, unsigned long code,
 		complete(&host_ctx->npu_power_up_done);
 		break;
 	}
-	case SUBSYS_AFTER_POWERUP:
+	case QCOM_SSR_AFTER_POWERUP:
 		break;
-	case SUBSYS_BEFORE_SHUTDOWN:
+	case QCOM_SSR_BEFORE_SHUTDOWN:
 	{
 		/* Prepare for unloading fw via PIL */
 		if (host_ctx->fw_state == FW_ENABLED) {
@@ -751,7 +713,7 @@ static int npu_notifier_cb(struct notifier_block *this, unsigned long code,
 
 		break;
 	}
-	case SUBSYS_AFTER_SHUTDOWN:
+	case QCOM_SSR_AFTER_SHUTDOWN:
 		ret = npu_set_bw(npu_dev, 0, 0);
 		if (ret)
 			NPU_WARN("Can't update bandwidth\n");
@@ -843,10 +805,8 @@ int npu_host_init(struct npu_device *npu_dev)
 	atomic_set(&host_ctx->ipc_trans_id, 1);
 
 	host_ctx->npu_dev = npu_dev;
-	/* TODO: replace subsys with remoteproc api */
 	host_ctx->nb.notifier_call = npu_notifier_cb;
-	host_ctx->notif_hdle = subsys_notif_register_notifier("npu",
-		&host_ctx->nb);
+	host_ctx->notif_hdle = qcom_register_ssr_notifier("npu", &host_ctx->nb);
 	if (IS_ERR(host_ctx->notif_hdle)) {
 		NPU_ERR("register event notification failed\n");
 		ret = PTR_ERR(host_ctx->notif_hdle);
@@ -934,8 +894,7 @@ fail:
 	if (host_ctx->wq_pri)
 		destroy_workqueue(host_ctx->wq_pri);
 	if (host_ctx->notif_hdle)
-		subsys_notif_unregister_notifier(host_ctx->notif_hdle,
-			&host_ctx->nb);
+		qcom_unregister_ssr_notifier(host_ctx->notif_hdle, &host_ctx->nb);
 	unregister_reboot_notifier(&host_ctx->reboot_nb);
 	mutex_destroy(&host_ctx->lock);
 	return ret;
@@ -1087,14 +1046,7 @@ static int host_error_hdlr(struct npu_device *npu_dev, bool force)
 
 	NPU_INFO("npu subsystem is restarting\n");
 	reinit_completion(&host_ctx->npu_power_up_done);
-	// TODO:
-	//ret = subsystem_restart_dev(host_ctx->subsystem_handle);
-	ret = -1;
-	if (ret) {
-		NPU_ERR("npu subsystem restart failed\n");
-		goto fw_start_done;
-	}
-	NPU_INFO("npu subsystem is restarted\n");
+	rproc_report_crash(host_ctx->npu_rproc_handle, RPROC_WATCHDOG);
 
 	ret = wait_for_completion_timeout(
 		&host_ctx->npu_power_up_done, NW_PWR_UP_TIMEOUT);
@@ -1103,6 +1055,7 @@ static int host_error_hdlr(struct npu_device *npu_dev, bool force)
 		ret = -ETIMEDOUT;
 		goto fw_start_done;
 	}
+	NPU_INFO("npu subsystem is restarted\n");
 
 	host_ctx->wdg_irq_sts = 0;
 	host_ctx->err_irq_sts = 0;
