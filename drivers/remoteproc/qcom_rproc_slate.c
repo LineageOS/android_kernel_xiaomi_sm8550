@@ -318,6 +318,8 @@ static irqreturn_t slate_status_change(int irq, void *dev_id)
 		return IRQ_HANDLED;
 
 	value = gpio_get_value(drvdata->gpios[0]);
+	update_s2a_status(value);
+
 	if (value && !drvdata->is_ready) {
 		dev_info(drvdata->dev,
 			"SLATE services are up and running: irq state changed 0->1\n");
@@ -437,8 +439,10 @@ static int slate_dt_parse_gpio(struct platform_device *pdev,
 
 	val = of_get_named_gpio(pdev->dev.of_node,
 					"qcom,slate2ap-status-gpio", 0);
-	if (val >= 0)
+	if (val >= 0) {
 		drvdata->gpios[0] = val;
+		update_s2a_status(gpio_get_value(drvdata->gpios[0]));
+	}
 	else {
 		pr_err("SLATE status gpio not found, error=%d\n", val);
 		return -EINVAL;
