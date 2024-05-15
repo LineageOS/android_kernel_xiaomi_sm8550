@@ -2287,10 +2287,9 @@ static int hgsl_ioctl_mem_alloc(struct file *filep, unsigned long arg)
 	}
 	mutex_lock(&priv->lock);
 	ret = hgsl_mem_add_node(&priv->mem_allocated, mem_node);
+	if (likely(!ret))
+		hgsl_trace_gpu_mem_total(priv, mem_node->memdesc.size64);
 	mutex_unlock(&priv->lock);
-	if (unlikely(ret))
-		goto out;
-	hgsl_trace_gpu_mem_total(priv, mem_node->memdesc.size64);
 
 out:
 	if (ret && mem_node) {
@@ -2460,10 +2459,9 @@ static int hgsl_ioctl_mem_map_smmu(struct file *filep, unsigned long arg)
 
 	mutex_lock(&priv->lock);
 	ret = hgsl_mem_add_node(&priv->mem_mapped, mem_node);
+	if (likely(!ret))
+		hgsl_trace_gpu_mem_total(priv, mem_node->memdesc.size64);
 	mutex_unlock(&priv->lock);
-	if (unlikely(ret))
-		goto out;
-	hgsl_trace_gpu_mem_total(priv, mem_node->memdesc.size64);
 
 out:
 	if (ret) {
