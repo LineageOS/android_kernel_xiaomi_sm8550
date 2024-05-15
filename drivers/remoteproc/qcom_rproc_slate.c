@@ -161,6 +161,8 @@ struct qcom_slate {
 	phys_addr_t mem_phys;
 	void *mem_region;
 	size_t mem_size;
+
+	struct wakeup_source rproc_slate_ws;
 };
 
 static irqreturn_t slate_status_change(int irq, void *dev_id);
@@ -321,6 +323,7 @@ static irqreturn_t slate_status_change(int irq, void *dev_id)
 	if (value && !drvdata->is_ready) {
 		dev_info(drvdata->dev,
 			"SLATE services are up and running: irq state changed 0->1\n");
+		__pm_relax(&drvdata->rproc_slate_ws);
 		drvdata->is_ready = true;
 		complete(&drvdata->err_ready);
 		slate_tz_req.tzapp_slate_cmd = SLATE_RPROC_UP_INFO;
@@ -340,6 +343,7 @@ static irqreturn_t slate_status_change(int irq, void *dev_id)
 				complete(&drvdata->shutdown_done);
 				return IRQ_HANDLED;
 			}
+		__pm_stay_awake(&drvdata->rproc_slate_ws);
 		queue_work(drvdata->slate_queue, &drvdata->restart_work);
 	} else {
 		dev_err(drvdata->dev, "SLATE status irq: unknown status\n");
@@ -1197,6 +1201,10 @@ static int rproc_slate_driver_probe(struct platform_device *pdev)
 	slate = (struct qcom_slate *)rproc->priv;
 
 	slate->dev = &pdev->dev;
+
+	/* Add wake lock */
+	wakeup_source_add(&slate->rproc_slate_ws);
+
 	/* Read GPIO configuration */
 	ret = slate_dt_parse_gpio(pdev, slate);
 	if (ret)
