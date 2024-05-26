@@ -2828,6 +2828,8 @@ static int __init netvsc_drv_init(void)
 
 	register_netdevice_notifier(&netvsc_netdev_notifier);
 
+	register_netdevice_notifier(&netvsc_netdev_notifier);
+
 	ret = vmbus_driver_register(&netvsc_drv);
 	if (ret)
 		goto err_vmbus_reg;

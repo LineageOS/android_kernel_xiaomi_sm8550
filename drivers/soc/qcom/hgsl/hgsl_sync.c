@@ -217,7 +217,7 @@ static void hgsl_hsync_fence_release(struct dma_fence *base)
 		spin_unlock(&timeline->lock);
 		hgsl_hsync_timeline_put(timeline);
 	}
-	kfree(fence);
+	dma_fence_free(base);
 }
 
 static void hgsl_hsync_fence_value_str(struct dma_fence *base,
@@ -794,7 +794,7 @@ static void hgsl_isync_fence_release(struct dma_fence *base)
 		hgsl_isync_timeline_put(fence->timeline);
 	}
 
-	kfree(fence);
+	dma_fence_free(base);
 }
 
 static void hgsl_isync_fence_value_str(struct dma_fence *base,

@@ -27,7 +27,7 @@
 #define CX_GMU_CBCR_WAKE_MASK           0xf
 #define CX_GMU_CBCR_WAKE_SHIFT          8
 
-static DEFINE_VDD_REGULATORS(vdd_cx, VDD_NUM, 1, vdd_corner);
+static DEFINE_VDD_REGULATORS(vdd_cx, VDD_L2_NUM, 1, vdd_l2_corner);
 static DEFINE_VDD_REGULATORS(vdd_mx, VDD_NUM, 1, vdd_corner);
 
 static struct clk_vdd_class *gpu_cc_sm6115_regulators[] = {
@@ -46,7 +46,7 @@ enum {
 };
 
 static struct pll_vco default_vco[] = {
-	{ 1000000000, 2000000000, 0 },
+	{ 1000000000, 2100000000, 0 },
 };
 
 static struct pll_vco pll1_vco[] = {
@@ -89,7 +89,7 @@ static struct clk_alpha_pll gpu_cc_pll0 = {
 			.num_rate_max = VDD_NUM,
 			.rate_max = (unsigned long[VDD_NUM]) {
 				[VDD_MIN] = 1000000000,
-				[VDD_NOMINAL] = 2000000000},
+				[VDD_NOMINAL] = 2100000000},
 		},
 	},
 };
@@ -246,6 +246,7 @@ static const struct freq_tbl ftbl_gpu_cc_gx_gfx3d_clk_src[] = {
 	F(900000000, P_GPU_CC_PLL0_OUT_AUX2, 2, 0, 0),
 	F(950000000, P_GPU_CC_PLL0_OUT_AUX2, 2, 0, 0),
 	F(980000000, P_GPU_CC_PLL0_OUT_AUX2, 2, 0, 0),
+	F(1050000000, P_GPU_CC_PLL0_OUT_AUX2, 2, 0, 0),
 	{ }
 };
 
@@ -264,15 +265,16 @@ static struct clk_rcg2 gpu_cc_gx_gfx3d_clk_src = {
 	},
 	.clkr.vdd_data = {
 		.vdd_class = &vdd_cx,
-		.num_rate_max = VDD_NUM,
-		.rate_max = (unsigned long[VDD_NUM]) {
-			[VDD_LOWER] = 320000000,
-			[VDD_LOW] = 465000000,
-			[VDD_LOW_L1] = 600000000,
-			[VDD_NOMINAL] = 745000000,
-			[VDD_NOMINAL_L1] = 820000000,
-			[VDD_HIGH] = 900000000,
-			[VDD_HIGH_L1] = 980000000},
+		.num_rate_max = VDD_L2_NUM,
+		.rate_max = (unsigned long[VDD_L2_NUM]) {
+			[VDD_L2_LOWER] = 320000000,
+			[VDD_L2_LOW] = 465000000,
+			[VDD_L2_LOW_L1] = 600000000,
+			[VDD_L2_NOMINAL] = 745000000,
+			[VDD_L2_NOMINAL_L1] = 820000000,
+			[VDD_L2_HIGH] = 900000000,
+			[VDD_L2_HIGH_L1] = 980000000,
+			[VDD_L2_HIGH_L2] = 1050000000},
 	},
 };
 

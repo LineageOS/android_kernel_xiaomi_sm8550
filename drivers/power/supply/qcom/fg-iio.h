@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __FG_GEN3_IIO_H
@@ -93,19 +93,19 @@ static const struct fg_gen3_iio_channels fg_gen3_iio_psy_channels[] = {
 	FG_GEN3_CHAN_ENERGY("charge_now_raw", PSY_IIO_CHARGE_NOW_RAW)
 	FG_GEN3_CHAN_ENERGY("charge_counter_shadow", PSY_IIO_CHARGE_COUNTER_SHADOW)
 	FG_GEN3_CHAN_VOLT("constant_charge_voltage", PSY_IIO_CONSTANT_CHARGE_VOLTAGE)
-	FG_GEN3_CHAN_ACT("charge_qnovo_enable", PSY_IIO_CHARGE_QNOVO_ENABLE)
+	FG_GEN3_CHAN_ACT("fg_charge_qnovo_enable", PSY_IIO_CHARGE_QNOVO_ENABLE)
 };
 
 enum fg_gen3_ext_iio_channels {
-	QNOVO_ENABLE = 0,
+	CHARGE_QNOVO_ENABLE = 0,
 	CHARGE_DONE,
 	PARALLEL_CHARGING_ENABLED,
 };
 
 static const char * const fg_gen3_ext_iio_chan_name[] = {
-	[QNOVO_ENABLE]			= "qnovo_enable",
+	[CHARGE_QNOVO_ENABLE]		= "charge_qnovo_enable",
 	[CHARGE_DONE]			= "charge_done",
-	[PARALLEL_CHARGING_ENABLED]	= "parallel_charging_enabled",
+	[PARALLEL_CHARGING_ENABLED]	= "charging_enabled",
 };
 
 #endif

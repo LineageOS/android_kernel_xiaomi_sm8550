@@ -2,7 +2,7 @@
 /*
  * Crypto TZ library for storage encryption.
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -20,12 +20,23 @@ int crypto_qti_program_key(const struct ice_mmio_data *mmio_data,
 {
 	int err = 0;
 	struct qtee_shm shm;
+	int i;
+	union {
+		u8 bytes[BLK_CRYPTO_MAX_WRAPPED_KEY_SIZE];
+		u32 words[BLK_CRYPTO_MAX_WRAPPED_KEY_SIZE / sizeof(u32)];
+	} key_new;
 
 	err = qtee_shmbridge_allocate_shm(key->size, &shm);
 	if (err)
 		return -ENOMEM;
 
-	memcpy(shm.vaddr, key->raw, key->size);
+	memcpy(key_new.bytes, key->raw, key->size);
+	if (!key->crypto_cfg.is_hw_wrapped) {
+		for (i = 0; i < ARRAY_SIZE(key_new.words); i++)
+			__cpu_to_be32s(&key_new.words[i]);
+	}
+
+	memcpy(shm.vaddr, key_new.bytes, key->size);
 	qtee_shmbridge_flush_shm_buf(&shm);
 
 	err = qcom_scm_config_set_ice_key(slot, shm.paddr, key->size,

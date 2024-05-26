@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -1218,6 +1218,11 @@ int mhi_dev_sm_init(struct mhi_dev *mhi_dev)
 
 	vf_id = mhi_dev->vf_id;
 
+	if (vf_id >= MHI_MAX_NUM_INSTANCES) {
+		MHI_SM_ERR(MHI_DEFAULT_ERROR_LOG_ID, "Invalid vf_id, return\n");
+		return -EINVAL;
+	}
+
 	MHI_SM_FUNC_ENTRY(vf_id);
 
 	if (!mhi_dev_sm_ctx[vf_id])
@@ -1264,10 +1269,16 @@ EXPORT_SYMBOL(mhi_dev_sm_init);
 int mhi_dev_sm_exit(struct mhi_dev *mhi_dev)
 {
 	struct mhi_sm_dev *mhi_sm_ctx = mhi_dev->mhi_sm_ctx;
-	int vf_id = 0;
-	struct mhi_dma_function_params mhi_dma_fun_params = mhi_sm_ctx->mhi_dev->mhi_dma_fun_params;
-	MHI_SM_FUNC_ENTRY(mhi_dev->vf_id);
+	int vf_id = mhi_dev->vf_id;
+	struct mhi_dma_function_params mhi_dma_fun_params;
 
+	if (vf_id >= MHI_MAX_NUM_INSTANCES) {
+		MHI_SM_ERR(MHI_DEFAULT_ERROR_LOG_ID, "Invalid vf_id, return\n");
+		return -EINVAL;
+	}
+
+	mhi_dma_fun_params = mhi_sm_ctx->mhi_dev->mhi_dma_fun_params;
+	MHI_SM_FUNC_ENTRY(mhi_dev->vf_id);
 	atomic_set(&mhi_sm_ctx->pending_device_events, 0);
 	atomic_set(&mhi_sm_ctx->pending_pcie_events, 0);
 	mhi_sm_debugfs_destroy();

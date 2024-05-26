@@ -12,10 +12,7 @@
 
 static int subsys_syscore_suspend(void)
 {
-	bool subsys_sleep_status = has_subsystem_slept();
-
-	pr_info("%s: All subsystems slept: %d\n", __func__, subsys_sleep_status);
-	return !subsys_sleep_status;
+	return 0;
 }
 
 struct syscore_ops subsys_sleep_syscore_ops = {
@@ -37,7 +34,7 @@ static int qcom_subsys_status_remove(struct platform_device *pdev)
 
 static int qcom_subsys_suspend_noirq(struct device *dev)
 {
-	bool subsys_sleep_status = has_subsystem_slept();
+	bool subsys_sleep_status = current_subsystem_sleep();
 
 	pr_info("%s: All subsystems slept: %d\n", __func__, subsys_sleep_status);
 	return !subsys_sleep_status;

@@ -262,8 +262,6 @@ struct mhi_dev_net_client {
 	/*To check write channel is empty or not*/
 	spinlock_t wrt_lock;
 	spinlock_t rd_lock;
-	struct mutex in_chan_lock;
-	struct mutex out_chan_lock;
 	spinlock_t net_tx_q_state;
 };
 
@@ -838,8 +836,6 @@ rx_req_failed:
 handle_in_err:
 	mhi_net_ctxt.dev_ops->close_channel(client->out_handle);
 handle_not_rdy_err:
-	mutex_unlock(&client->in_chan_lock);
-	mutex_unlock(&client->out_chan_lock);
 	return rc;
 }
 
@@ -879,23 +875,12 @@ static int mhi_dev_net_rgstr_client(struct mhi_dev_net_client *client, int idx)
 {
 	client->out_chan = idx;
 	client->in_chan = idx + 1;
-	mutex_init(&client->in_chan_lock);
-	mutex_init(&client->out_chan_lock);
 	spin_lock_init(&client->wrt_lock);
 	spin_lock_init(&client->net_tx_q_state);
 	spin_lock_init(&client->rd_lock);
 	mhi_dev_net_log(client->vf_id, MHI_INFO, "Registering OUT ch_id:%d\t"
 			"IN ch_id:%d channels\n",
 			client->out_chan, client->in_chan);
-	return 0;
-}
-
-static int mhi_dev_net_dergstr_client
-				(struct mhi_dev_net_client *client)
-{
-	mutex_destroy(&client->in_chan_lock);
-	mutex_destroy(&client->out_chan_lock);
-
 	return 0;
 }
 
@@ -1048,7 +1033,7 @@ int mhi_dev_net_interface_init(struct mhi_dev_ops *dev_ops, uint32_t vf_id, uint
 		if (ret_val < 0) {
 			mhi_dev_net_log(vf_id, MHI_ERROR,
 					"Failed to init client attributes\n");
-			goto channel_init_fail;
+			goto init_failed;
 		}
 		mhi_dev_net_log(vf_id, MHI_DBG, "Initializing client\n");
 
@@ -1057,7 +1042,7 @@ int mhi_dev_net_interface_init(struct mhi_dev_ops *dev_ops, uint32_t vf_id, uint
 		if (ret_val) {
 			mhi_dev_net_log(vf_id, MHI_CRITICAL,
 				"Failed to reg client %d ret 0\n", ret_val);
-			goto client_register_fail;
+			goto init_failed;
 		}
 
 		ret_val = dev_ops->register_state_cb(mhi_dev_net_state_cb,
@@ -1065,7 +1050,7 @@ int mhi_dev_net_interface_init(struct mhi_dev_ops *dev_ops, uint32_t vf_id, uint
 						   mhi_net_client[i]->out_chan,
 						   vf_id);
 		if (ret_val < 0 && ret_val != -EEXIST)
-			goto register_state_cb_fail;
+			goto init_failed;
 
 		ret_val = dev_ops->register_state_cb(mhi_dev_net_state_cb,
 						   mhi_net_client[i],
@@ -1092,12 +1077,12 @@ int mhi_dev_net_interface_init(struct mhi_dev_ops *dev_ops, uint32_t vf_id, uint
 					if (ret_val < 0) {
 						mhi_dev_net_log(vf_id, MHI_ERROR,
 							"Failed to open channels\n");
-						goto channel_open_fail;
+						goto init_failed;
 					}
 				}
 			}
 		} else if (ret_val < 0) {
-			goto register_state_cb_fail;
+			goto init_failed;
 		}
 	}
 
@@ -1105,12 +1090,7 @@ int mhi_dev_net_interface_init(struct mhi_dev_ops *dev_ops, uint32_t vf_id, uint
 
 mem_alloc_fail:
 	ret_val = -ENOMEM;
-channel_open_fail:
-register_state_cb_fail:
-	for (j = i ; j > 0; j--)
-		mhi_dev_net_dergstr_client(mhi_net_client[j]);
-client_register_fail:
-channel_init_fail:
+init_failed:
 	for (j = i ; j > 0; j--) {
 		destroy_workqueue(mhi_net_client[j]->pending_pckt_wq);
 		kfree(mhi_net_client[j]);

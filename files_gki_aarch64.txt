@@ -795,6 +795,7 @@ drivers/firmware/arm_scmi/clock.c
 drivers/firmware/arm_scmi/common.h
 drivers/firmware/arm_scmi/driver.c
 drivers/firmware/arm_scmi/mailbox.c
+drivers/firmware/arm_scmi/msg.c
 drivers/firmware/arm_scmi/notify.c
 drivers/firmware/arm_scmi/notify.h
 drivers/firmware/arm_scmi/perf.c
@@ -804,6 +805,7 @@ drivers/firmware/arm_scmi/sensors.c
 drivers/firmware/arm_scmi/shmem.c
 drivers/firmware/arm_scmi/smc.c
 drivers/firmware/arm_scmi/system.c
+drivers/firmware/arm_scmi/virtio.c
 drivers/firmware/arm_scmi/voltage.c
 drivers/firmware/arm_scpi.c
 drivers/firmware/efi/arm-runtime.c
@@ -4118,6 +4120,7 @@ include/trace/hooks/sysrqcrash.h
 include/trace/hooks/thermal.h
 include/trace/hooks/timekeeping.h
 include/trace/hooks/timer.h
+include/trace/hooks/tmpfile.h
 include/trace/hooks/topology.h
 include/trace/hooks/traps.h
 include/trace/hooks/ufshcd.h
@@ -4566,6 +4569,7 @@ include/uapi/linux/virtio_fs.h
 include/uapi/linux/virtio_ids.h
 include/uapi/linux/virtio_net.h
 include/uapi/linux/virtio_ring.h
+include/uapi/linux/virtio_scmi.h
 include/uapi/linux/virtio_types.h
 include/uapi/linux/virtio_vsock.h
 include/uapi/linux/vmcore.h

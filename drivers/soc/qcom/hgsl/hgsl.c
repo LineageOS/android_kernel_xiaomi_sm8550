@@ -823,7 +823,7 @@ static int hgsl_init_global_db(struct qcom_hgsl *hgsl,
 	}
 
 	if (!is_sender && !hgsl->wq) {
-		hgsl->wq = create_workqueue("hgsl-wq");
+		hgsl->wq = alloc_workqueue("hgsl-wq", WQ_HIGHPRI, 0);
 		if (IS_ERR_OR_NULL(hgsl->wq)) {
 			dev_err(dev, "failed to create workqueue\n");
 			ret = PTR_ERR(hgsl->wq);
@@ -2286,8 +2286,10 @@ static int hgsl_ioctl_mem_alloc(struct file *filep, unsigned long arg)
 		goto out;
 	}
 	mutex_lock(&priv->lock);
-	list_add(&mem_node->node, &priv->mem_allocated);
+	ret = hgsl_mem_add_node(&priv->mem_allocated, mem_node);
 	mutex_unlock(&priv->lock);
+	if (unlikely(ret))
+		goto out;
 	hgsl_trace_gpu_mem_total(priv, mem_node->memdesc.size64);
 
 out:
@@ -2306,7 +2308,6 @@ static int hgsl_ioctl_mem_free(struct file *filep, unsigned long arg)
 	struct gsl_memdesc_t memdesc;
 	int ret = 0;
 	struct hgsl_mem_node *node_found = NULL;
-	struct hgsl_mem_node *tmp = NULL;
 	struct hgsl_hab_channel_t *hab_channel = NULL;
 
 	ret = hgsl_hyp_channel_pool_get(&priv->hyp_priv, 0, &hab_channel);
@@ -2328,16 +2329,11 @@ static int hgsl_ioctl_mem_free(struct file *filep, unsigned long arg)
 	}
 
 	mutex_lock(&priv->lock);
-	list_for_each_entry(tmp, &priv->mem_allocated, node) {
-		if ((tmp->memdesc.gpuaddr == memdesc.gpuaddr)
-			&& (tmp->memdesc.size == memdesc.size)) {
-			node_found = tmp;
-			list_del(&node_found->node);
-			break;
-		}
-	}
+	node_found = hgsl_mem_find_node_locked(&priv->mem_allocated,
+					memdesc.gpuaddr, memdesc.size64, true);
+	if (node_found)
+		rb_erase(&node_found->mem_rb_node, &priv->mem_allocated);
 	mutex_unlock(&priv->lock);
-
 	if (node_found) {
 		ret = hgsl_hyp_mem_unmap_smmu(hab_channel, node_found);
 		if (!ret) {
@@ -2347,14 +2343,14 @@ static int hgsl_ioctl_mem_free(struct file *filep, unsigned long arg)
 		} else {
 			LOGE("hgsl_hyp_mem_unmap_smmu failed %d", ret);
 			mutex_lock(&priv->lock);
-			list_add(&node_found->node, &priv->mem_allocated);
+			ret = hgsl_mem_add_node(&priv->mem_allocated, node_found);
 			mutex_unlock(&priv->lock);
+			if (unlikely(ret))
+				LOGE("unlikely to get here! %d", ret);
 		}
-	} else {
+	} else
 		LOGE("can't find the memory 0x%llx, 0x%x",
 			memdesc.gpuaddr, memdesc.size);
-		goto out;
-	}
 
 out:
 	hgsl_hyp_channel_pool_put(hab_channel);
@@ -2368,6 +2364,7 @@ static int hgsl_ioctl_set_metainfo(struct file *filep, unsigned long arg)
 	int ret = 0;
 	struct hgsl_mem_node *mem_node = NULL;
 	struct hgsl_mem_node *tmp = NULL;
+	struct rb_node *rb = NULL;
 	char metainfo[HGSL_MEM_META_MAX_SIZE] = {0};
 
 	if (copy_from_user(&params, USRPTR(arg), sizeof(params))) {
@@ -2390,7 +2387,8 @@ static int hgsl_ioctl_set_metainfo(struct file *filep, unsigned long arg)
 	metainfo[HGSL_MEM_META_MAX_SIZE - 1] = '\0';
 
 	mutex_lock(&priv->lock);
-	list_for_each_entry(tmp, &priv->mem_allocated, node) {
+	for (rb = rb_first(&priv->mem_allocated); rb; rb = rb_next(rb)) {
+		tmp = rb_entry(rb, struct hgsl_mem_node, mem_rb_node);
 		if (tmp->memdesc.priv64 == params.memdesc_priv) {
 			mem_node = tmp;
 			break;
@@ -2447,23 +2445,25 @@ static int hgsl_ioctl_mem_map_smmu(struct file *filep, unsigned long arg)
 	mem_node->memtype = params.memtype;
 
 	ret = hgsl_hyp_mem_map_smmu(hab_channel, params.size, params.offset, mem_node);
+	if (ret)
+		goto out;
 
-	if (ret == 0) {
-		if (copy_to_user(USRPTR(arg), &params, sizeof(params))) {
-			ret = -EFAULT;
-			goto out;
-		}
-		if (copy_to_user(USRPTR(params.memdesc), &mem_node->memdesc,
-			sizeof(mem_node->memdesc))) {
-			ret = -EFAULT;
-			goto out;
-		}
-		mutex_lock(&priv->lock);
-		list_add(&mem_node->node, &priv->mem_mapped);
-		mutex_unlock(&priv->lock);
-
-		hgsl_trace_gpu_mem_total(priv, mem_node->memdesc.size64);
+	if (copy_to_user(USRPTR(arg), &params, sizeof(params))) {
+		ret = -EFAULT;
+		goto out;
 	}
+	if (copy_to_user(USRPTR(params.memdesc), &mem_node->memdesc,
+		sizeof(mem_node->memdesc))) {
+		ret = -EFAULT;
+		goto out;
+	}
+
+	mutex_lock(&priv->lock);
+	ret = hgsl_mem_add_node(&priv->mem_mapped, mem_node);
+	mutex_unlock(&priv->lock);
+	if (unlikely(ret))
+		goto out;
+	hgsl_trace_gpu_mem_total(priv, mem_node->memdesc.size64);
 
 out:
 	if (ret) {
@@ -2480,7 +2480,6 @@ static int hgsl_ioctl_mem_unmap_smmu(struct file *filep, unsigned long arg)
 	struct hgsl_ioctl_mem_unmap_smmu_params params;
 	int ret = 0;
 	struct hgsl_mem_node *node_found = NULL;
-	struct hgsl_mem_node *tmp = NULL;
 	struct hgsl_hab_channel_t *hab_channel = NULL;
 
 	ret = hgsl_hyp_channel_pool_get(&priv->hyp_priv, 0, &hab_channel);
@@ -2496,31 +2495,28 @@ static int hgsl_ioctl_mem_unmap_smmu(struct file *filep, unsigned long arg)
 	}
 
 	mutex_lock(&priv->lock);
-	list_for_each_entry(tmp, &priv->mem_mapped, node) {
-		if ((tmp->memdesc.gpuaddr == params.gpuaddr)
-			&& (tmp->memdesc.size == params.size)) {
-			node_found = tmp;
-			list_del(&node_found->node);
-			break;
-		}
-	}
+	node_found = hgsl_mem_find_node_locked(&priv->mem_mapped,
+					params.gpuaddr, params.size, true);
+	if (node_found)
+		rb_erase(&node_found->mem_rb_node, &priv->mem_mapped);
 	mutex_unlock(&priv->lock);
-
 	if (node_found) {
 		hgsl_put_sgt(node_found, false);
 		ret = hgsl_hyp_mem_unmap_smmu(hab_channel, node_found);
-		if (ret) {
-			mutex_lock(&priv->lock);
-			list_add(&node_found->node, &priv->mem_mapped);
-			mutex_unlock(&priv->lock);
-		} else {
+		if (!ret) {
 			hgsl_trace_gpu_mem_total(priv,
 					-(node_found->memdesc.size64));
 			hgsl_free(node_found);
+		} else {
+			LOGE("hgsl_hyp_mem_unmap_smmu failed %d", ret);
+			mutex_lock(&priv->lock);
+			ret = hgsl_mem_add_node(&priv->mem_mapped, node_found);
+			mutex_unlock(&priv->lock);
+			if (unlikely(ret))
+				LOGE("unlikely to get here! %d", ret);
 		}
-	} else {
+	} else
 		ret = -EINVAL;
-	}
 
 out:
 	hgsl_hyp_channel_pool_put(hab_channel);
@@ -2550,15 +2546,16 @@ static int hgsl_ioctl_mem_cache_operation(struct file *filep, unsigned long arg)
 	}
 
 	mutex_lock(&priv->lock);
-	node_found = hgsl_mem_find_base_locked(&priv->mem_allocated,
-					gpuaddr, params.sizebytes);
+	node_found = hgsl_mem_find_node_locked(&priv->mem_allocated,
+					gpuaddr, params.sizebytes, false);
 	if (node_found)
 		internal = true;
 	else {
-		node_found = hgsl_mem_find_base_locked(&priv->mem_mapped,
-					gpuaddr, params.sizebytes);
+		node_found = hgsl_mem_find_node_locked(&priv->mem_mapped,
+					gpuaddr, params.sizebytes, false);
 		if (!node_found) {
-			LOGE("failed to find node %d", ret);
+			LOGE("failed to find gpuaddr: 0x%llx size: 0x%llx",
+				gpuaddr, params.sizebytes);
 			ret = -EINVAL;
 			mutex_unlock(&priv->lock);
 			goto out;
@@ -2581,7 +2578,6 @@ static int hgsl_ioctl_mem_get_fd(struct file *filep, unsigned long arg)
 	struct hgsl_ioctl_mem_get_fd_params params;
 	struct gsl_memdesc_t memdesc;
 	struct hgsl_mem_node *node_found = NULL;
-	struct hgsl_mem_node *tmp = NULL;
 	int ret = 0;
 
 	if (copy_from_user(&params, USRPTR(arg), sizeof(params))) {
@@ -2597,16 +2593,16 @@ static int hgsl_ioctl_mem_get_fd(struct file *filep, unsigned long arg)
 	}
 
 	mutex_lock(&priv->lock);
-	list_for_each_entry(tmp, &priv->mem_allocated, node) {
-		if ((tmp->memdesc.gpuaddr == memdesc.gpuaddr)
-			&& (tmp->memdesc.size == memdesc.size)) {
-			node_found = tmp;
-			break;
-		}
-	}
-	params.fd = -1;
-	if (node_found && node_found->dma_buf) {
+	node_found = hgsl_mem_find_node_locked(&priv->mem_allocated,
+				memdesc.gpuaddr, memdesc.size64, true);
+	if (node_found && node_found->dma_buf)
 		get_dma_buf(node_found->dma_buf);
+	else
+		ret = -EINVAL;
+	mutex_unlock(&priv->lock);
+
+	params.fd = -1;
+	if (!ret) {
 		params.fd = dma_buf_fd(node_found->dma_buf, O_CLOEXEC);
 		if (params.fd < 0) {
 			LOGE("dma buf to fd failed");
@@ -2616,12 +2612,9 @@ static int hgsl_ioctl_mem_get_fd(struct file *filep, unsigned long arg)
 			LOGE("copy_to_user failed");
 			ret = -EFAULT;
 		}
-	} else {
+	} else
 		LOGE("can't find the memory 0x%llx, 0x%x, node_found:%p",
 			 memdesc.gpuaddr, memdesc.size, node_found);
-		ret = -EINVAL;
-	}
-	mutex_unlock(&priv->lock);
 
 out:
 	return ret;
@@ -3341,8 +3334,8 @@ static int hgsl_open(struct inode *inodep, struct file *filep)
 		goto out;
 	}
 
-	INIT_LIST_HEAD(&priv->mem_mapped);
-	INIT_LIST_HEAD(&priv->mem_allocated);
+	priv->mem_mapped = RB_ROOT;
+	priv->mem_allocated = RB_ROOT;
 	mutex_init(&priv->lock);
 	priv->pid = pid_nr;
 
@@ -3369,10 +3362,10 @@ out:
 static int hgsl_cleanup(struct hgsl_priv *priv)
 {
 	struct hgsl_mem_node *node_found = NULL;
-	struct hgsl_mem_node *tmp = NULL;
+	struct rb_node *next = NULL;
 	int ret;
-	bool need_notify = (!list_empty(&priv->mem_mapped) ||
-				!list_empty(&priv->mem_allocated));
+	bool need_notify = (!RB_EMPTY_ROOT(&priv->mem_mapped) ||
+				!RB_EMPTY_ROOT(&priv->mem_allocated));
 	struct hgsl_hab_channel_t *hab_channel = NULL;
 
 	if (need_notify) {
@@ -3389,13 +3382,16 @@ static int hgsl_cleanup(struct hgsl_priv *priv)
 
 	mutex_lock(&priv->lock);
 	if ((hab_channel == NULL) &&
-			(!list_empty(&priv->mem_mapped) || !list_empty(&priv->mem_allocated))) {
+		(!RB_EMPTY_ROOT(&priv->mem_mapped) ||
+			!RB_EMPTY_ROOT(&priv->mem_allocated))) {
 		ret = hgsl_hyp_channel_pool_get(&priv->hyp_priv, 0, &hab_channel);
 		if (ret)
 			LOGE("Failed to get channel %d", ret);
 	}
 
-	list_for_each_entry_safe(node_found, tmp, &priv->mem_mapped, node) {
+	next = rb_first(&priv->mem_mapped);
+	while (next) {
+		node_found = rb_entry(next, struct hgsl_mem_node, mem_rb_node);
 		hgsl_put_sgt(node_found, false);
 		ret = hgsl_hyp_mem_unmap_smmu(hab_channel, node_found);
 		if (ret)
@@ -3403,16 +3399,23 @@ static int hgsl_cleanup(struct hgsl_priv *priv)
 					node_found->export_id, node_found->memdesc.gpuaddr, ret);
 		else
 			hgsl_trace_gpu_mem_total(priv, -(node_found->memdesc.size64));
-		list_del(&node_found->node);
+
+		next = rb_next(&node_found->mem_rb_node);
+		rb_erase(&node_found->mem_rb_node, &priv->mem_mapped);
 		hgsl_free(node_found);
 	}
-	list_for_each_entry_safe(node_found, tmp, &priv->mem_allocated, node) {
+
+	next = rb_first(&priv->mem_allocated);
+	while (next) {
+		node_found = rb_entry(next, struct hgsl_mem_node, mem_rb_node);
 		ret = hgsl_hyp_mem_unmap_smmu(hab_channel, node_found);
 		if (ret)
 			LOGE("Failed to clean mapped buffer %u, 0x%llx, ret %d",
 					node_found->export_id, node_found->memdesc.gpuaddr, ret);
-		list_del(&node_found->node);
 		hgsl_trace_gpu_mem_total(priv, -(node_found->memdesc.size64));
+
+		next = rb_next(&node_found->mem_rb_node);
+		rb_erase(&node_found->mem_rb_node, &priv->mem_allocated);
 		hgsl_sharedmem_free(node_found);
 	}
 	mutex_unlock(&priv->lock);
@@ -3485,7 +3488,7 @@ static int hgsl_init_release_wq(struct qcom_hgsl *hgsl)
 {
 	int ret = 0;
 
-	hgsl->release_wq = create_workqueue("hgsl-release-wq");
+	hgsl->release_wq = alloc_workqueue("hgsl-release-wq", WQ_HIGHPRI, 0);
 	if (IS_ERR_OR_NULL(hgsl->release_wq)) {
 		dev_err(hgsl->dev, "failed to create workqueue\n");
 		ret = PTR_ERR(hgsl->release_wq);
@@ -3783,116 +3786,85 @@ static int hgsl_ioctl_timeline_wait(struct file *filep,
 	return ret;
 }
 
+static const struct hgsl_ioctl hgsl_ioctl_func_table[] = {
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_ISSUE_IB,
+			hgsl_ioctl_issueib),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_CTXT_CREATE,
+			hgsl_ioctl_ctxt_create),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_CTXT_DESTROY,
+			hgsl_ioctl_ctxt_destroy),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_WAIT_TIMESTAMP,
+			hgsl_ioctl_wait_timestamp),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_READ_TIMESTAMP,
+			hgsl_ioctl_read_timestamp),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_CHECK_TIMESTAMP,
+			hgsl_ioctl_check_timestamp),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_HYP_GENERIC_TRANSACTION,
+			hgsl_ioctl_hyp_generic_transaction),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_GET_SHADOWTS_MEM,
+			hgsl_ioctl_get_shadowts_mem),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_PUT_SHADOWTS_MEM,
+			hgsl_ioctl_put_shadowts_mem),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_MEM_ALLOC,
+			hgsl_ioctl_mem_alloc),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_MEM_FREE,
+			hgsl_ioctl_mem_free),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_MEM_MAP_SMMU,
+			hgsl_ioctl_mem_map_smmu),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_MEM_UNMAP_SMMU,
+			hgsl_ioctl_mem_unmap_smmu),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_MEM_CACHE_OPERATION,
+			hgsl_ioctl_mem_cache_operation),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_MEM_GET_FD,
+			hgsl_ioctl_mem_get_fd),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_ISSUIB_WITH_ALLOC_LIST,
+			hgsl_ioctl_issueib_with_alloc_list),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_GET_SYSTEM_TIME,
+			hgsl_ioctl_get_system_time),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_SYNCOBJ_WAIT_MULTIPLE,
+			hgsl_ioctl_syncobj_wait_multiple),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_PERFCOUNTER_SELECT,
+			hgsl_ioctl_perfcounter_select),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_PERFCOUNTER_DESELECT,
+			hgsl_ioctl_perfcounter_deselect),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_PERFCOUNTER_QUERY_SELECTION,
+			hgsl_ioctl_perfcounter_query_selection),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_PERFCOUNTER_READ,
+			hgsl_ioctl_perfcounter_read),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_SET_METAINFO,
+			hgsl_ioctl_set_metainfo),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_HSYNC_FENCE_CREATE,
+			hgsl_ioctl_hsync_fence_create),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_ISYNC_TIMELINE_CREATE,
+			hgsl_ioctl_isync_timeline_create),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_ISYNC_TIMELINE_DESTROY,
+			hgsl_ioctl_isync_timeline_destroy),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_ISYNC_FENCE_CREATE,
+			hgsl_ioctl_isync_fence_create),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_ISYNC_FENCE_SIGNAL,
+			hgsl_ioctl_isync_fence_signal),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_ISYNC_FORWARD,
+			hgsl_ioctl_isync_forward),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_TIMELINE_CREATE,
+			hgsl_ioctl_timeline_create),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_TIMELINE_SIGNAL,
+			hgsl_ioctl_timeline_signal),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_TIMELINE_QUERY,
+			hgsl_ioctl_timeline_query),
+	HGSL_IOCTL_FUNC(HGSL_IOCTL_TIMELINE_WAIT,
+			hgsl_ioctl_timeline_wait),
+};
+
 static long hgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 {
-	int ret;
+	const struct hgsl_ioctl *ioctls = hgsl_ioctl_func_table;
+	int size = ARRAY_SIZE(hgsl_ioctl_func_table);
+	unsigned int nr = _IOC_NR(cmd);
 
-	switch (cmd) {
-	case HGSL_IOCTL_ISSUE_IB:
-		ret = hgsl_ioctl_issueib(filep, arg);
-		break;
-	case HGSL_IOCTL_CTXT_CREATE:
-		ret = hgsl_ioctl_ctxt_create(filep, arg);
-		break;
-	case HGSL_IOCTL_CTXT_DESTROY:
-		ret = hgsl_ioctl_ctxt_destroy(filep, arg);
-		break;
-	case HGSL_IOCTL_WAIT_TIMESTAMP:
-		ret = hgsl_ioctl_wait_timestamp(filep, arg);
-		break;
-	case HGSL_IOCTL_READ_TIMESTAMP:
-		ret = hgsl_ioctl_read_timestamp(filep, arg);
-		break;
-	case HGSL_IOCTL_CHECK_TIMESTAMP:
-		ret = hgsl_ioctl_check_timestamp(filep, arg);
-		break;
-	case HGSL_IOCTL_HYP_GENERIC_TRANSACTION:
-		ret = hgsl_ioctl_hyp_generic_transaction(filep, arg);
-		break;
-	case HGSL_IOCTL_GET_SHADOWTS_MEM:
-		ret = hgsl_ioctl_get_shadowts_mem(filep, arg);
-		break;
-	case HGSL_IOCTL_PUT_SHADOWTS_MEM:
-		ret = hgsl_ioctl_put_shadowts_mem(filep, arg);
-		break;
-	case HGSL_IOCTL_MEM_ALLOC:
-		ret = hgsl_ioctl_mem_alloc(filep, arg);
-		break;
-	case HGSL_IOCTL_MEM_FREE:
-		ret = hgsl_ioctl_mem_free(filep, arg);
-		break;
-	case HGSL_IOCTL_MEM_MAP_SMMU:
-		ret = hgsl_ioctl_mem_map_smmu(filep, arg);
-		break;
-	case HGSL_IOCTL_MEM_UNMAP_SMMU:
-		ret = hgsl_ioctl_mem_unmap_smmu(filep, arg);
-		break;
-	case HGSL_IOCTL_MEM_CACHE_OPERATION:
-		ret = hgsl_ioctl_mem_cache_operation(filep, arg);
-		break;
-	case HGSL_IOCTL_MEM_GET_FD:
-		ret = hgsl_ioctl_mem_get_fd(filep, arg);
-		break;
-	case HGSL_IOCTL_ISSUIB_WITH_ALLOC_LIST:
-		ret = hgsl_ioctl_issueib_with_alloc_list(filep, arg);
-		break;
-	case HGSL_IOCTL_GET_SYSTEM_TIME:
-		ret = hgsl_ioctl_get_system_time(filep, arg);
-		break;
-	case HGSL_IOCTL_SYNCOBJ_WAIT_MULTIPLE:
-		ret = hgsl_ioctl_syncobj_wait_multiple(filep, arg);
-		break;
-	case HGSL_IOCTL_PERFCOUNTER_SELECT:
-		ret = hgsl_ioctl_perfcounter_select(filep, arg);
-		break;
-	case HGSL_IOCTL_PERFCOUNTER_DESELECT:
-		ret = hgsl_ioctl_perfcounter_deselect(filep, arg);
-		break;
-	case HGSL_IOCTL_PERFCOUNTER_QUERY_SELECTION:
-		ret = hgsl_ioctl_perfcounter_query_selection(filep, arg);
-		break;
-	case HGSL_IOCTL_PERFCOUNTER_READ:
-		ret = hgsl_ioctl_perfcounter_read(filep, arg);
-		break;
-	case HGSL_IOCTL_SET_METAINFO:
-		ret = hgsl_ioctl_set_metainfo(filep, arg);
-		break;
-	case HGSL_IOCTL_HSYNC_FENCE_CREATE:
-		ret = hgsl_ioctl_hsync_fence_create(filep, arg);
-		break;
-	case HGSL_IOCTL_ISYNC_TIMELINE_CREATE:
-		ret = hgsl_ioctl_isync_timeline_create(filep, arg);
-		break;
-	case HGSL_IOCTL_ISYNC_TIMELINE_DESTROY:
-		ret = hgsl_ioctl_isync_timeline_destroy(filep, arg);
-		break;
-	case HGSL_IOCTL_ISYNC_FENCE_CREATE:
-		ret = hgsl_ioctl_isync_fence_create(filep, arg);
-		break;
-	case HGSL_IOCTL_ISYNC_FENCE_SIGNAL:
-		ret = hgsl_ioctl_isync_fence_signal(filep, arg);
-		break;
-	case HGSL_IOCTL_ISYNC_FORWARD:
-		ret = hgsl_ioctl_isync_forward(filep, arg);
-		break;
-	case HGSL_IOCTL_TIMELINE_CREATE:
-		ret = hgsl_ioctl_timeline_create(filep, arg);
-		break;
-	case HGSL_IOCTL_TIMELINE_SIGNAL:
-		ret = hgsl_ioctl_timeline_signal(filep, arg);
-		break;
-	case HGSL_IOCTL_TIMELINE_QUERY:
-		ret = hgsl_ioctl_timeline_query(filep, arg);
-		break;
-	case HGSL_IOCTL_TIMELINE_WAIT:
-		ret = hgsl_ioctl_timeline_wait(filep, arg);
-		break;
+	if (nr >= size || ioctls[nr].func == NULL)
+		return -ENOIOCTLCMD;
 
-	default:
-		ret = -ENOIOCTLCMD;
-	}
-
-	return ret;
+	return ioctls[nr].func(filep, arg);
 }
 
 static long hgsl_compat_ioctl(struct file *filep, unsigned int cmd,

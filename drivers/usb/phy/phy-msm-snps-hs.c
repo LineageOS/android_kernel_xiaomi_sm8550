@@ -358,7 +358,7 @@ static int msm_hsphy_enable_power(struct msm_hsphy *phy, bool on)
 			__func__, on ? "on" : "off", phy->power_enabled);
 
 	if (phy->power_enabled == on) {
-		dev_dbg(phy->phy.dev, "PHYs' regulators are already ON.\n");
+		dev_dbg(phy->phy.dev, "PHYs' regulators are already %s.\n", on ? "ON" : "OFF");
 		return 0;
 	}
 

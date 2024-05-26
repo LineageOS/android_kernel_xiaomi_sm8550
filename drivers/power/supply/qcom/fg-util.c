@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -11,6 +11,7 @@
 #include "fg-core.h"
 #include "fg-reg.h"
 #include "fg-iio.h"
+#include "fg-gen4-iio.h"
 
 /* 3 byte address + 1 space character */
 #define ADDR_LEN			4
@@ -439,13 +440,31 @@ bool is_qnovo_en(struct fg_dev *fg)
 	if (!batt_psy_initialized(fg))
 		return false;
 
-	rc = fg_gen3_read_iio_chan(chip, QNOVO_ENABLE, &val);
+	rc = fg_gen3_read_iio_chan(chip, CHARGE_QNOVO_ENABLE, &val);
 	if (rc < 0) {
-		pr_debug("Failed to get QNOVO_ENABLE value\n");
+		pr_debug("Failed to get CHARGE_QNOVO_ENABLE value\n");
 		return false;
 	} else {
 		return val != 0;
 	}
+}
+
+bool fg_gen4_is_qnovo_en(struct fg_dev *fg)
+{
+	struct fg_gen4_chip *chip = container_of(fg, struct fg_gen4_chip, fg);
+	int rc, val;
+
+	if (!batt_psy_initialized(fg))
+		return false;
+
+	rc = fg_gen4_read_iio_chan(chip, FG_GEN4_QNOVO_ENABLE, &val);
+	if (rc < 0) {
+		pr_debug("Failed to get QNOVO_ENABLE value\n");
+		return false;
+	}
+
+	return val != 0;
+
 }
 
 bool pc_port_psy_initialized(struct fg_dev *fg)
@@ -464,6 +483,16 @@ bool is_parallel_charger_available(struct fg_dev *fg)
 {
 		struct fg_gen3_chip *chip = container_of(fg, struct fg_gen3_chip, fg);
 	if (is_chan_valid(chip, PARALLEL_CHARGING_ENABLED))
+		return true;
+
+	return false;
+}
+
+bool fg_gen4_is_parallel_charger_available(struct fg_dev *fg)
+{
+	struct fg_gen4_chip *chip = container_of(fg, struct fg_gen4_chip, fg);
+
+	if (is_chan_valid_fg_gen4(chip, FG_GEN4_PARALLEL_CHARGING_ENABLED))
 		return true;
 
 	return false;
@@ -1757,4 +1786,125 @@ int fg_gen3_read_int_iio_chan(struct iio_channel *iio_chan_list, int chan_id,
 	} while (iio_chan_list++);
 
 	return -ENOENT;
+}
+
+bool is_chan_valid_fg_gen4(struct fg_gen4_chip *chip,
+		enum fg_gen4_ext_iio_channels chan)
+{
+	int rc;
+
+	if (IS_ERR(chip->ext_iio_chans[chan]))
+		return false;
+
+	if (!chip->ext_iio_chans[chan]) {
+		chip->ext_iio_chans[chan] = iio_channel_get(chip->fg.dev,
+						fg_gen4_ext_iio_chan_name[chan]);
+		if (IS_ERR(chip->ext_iio_chans[chan])) {
+			rc = PTR_ERR(chip->ext_iio_chans[chan]);
+			if (rc == -EPROBE_DEFER)
+				chip->ext_iio_chans[chan] = NULL;
+
+			pr_err("Failed to get IIO channel %s, rc=%d\n",
+				fg_gen4_ext_iio_chan_name[chan], rc);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+int fg_gen4_read_iio_chan(struct fg_gen4_chip *chip,
+	enum fg_gen4_ext_iio_channels chan, int *val)
+{
+	int rc;
+
+	if (is_chan_valid_fg_gen4(chip, chan)) {
+		rc = iio_read_channel_processed(
+				chip->ext_iio_chans[chan], val);
+		return (rc < 0) ? rc : 0;
+	}
+
+	return -EINVAL;
+}
+
+int fg_gen4_write_iio_chan(struct fg_gen4_chip *chip,
+	enum fg_gen4_ext_iio_channels chan, int val)
+{
+	if (is_chan_valid_fg_gen4(chip, chan))
+		return iio_write_channel_raw(chip->ext_iio_chans[chan],
+						val);
+
+	return -EINVAL;
+}
+
+int read_range_data_from_node(struct device_node *node,
+		const char *prop_str, struct range_data *ranges,
+		int max_threshold, u32 max_value)
+{
+	int rc = 0, i, length, per_tuple_length, tuples;
+
+	if (!node || !prop_str || !ranges) {
+		pr_err("Invalid parameters passed\n");
+		return -EINVAL;
+	}
+
+	rc = of_property_count_elems_of_size(node, prop_str, sizeof(u32));
+	if (rc < 0) {
+		pr_err("Count %s failed, rc=%d\n", prop_str, rc);
+		return rc;
+	}
+
+	length = rc;
+	per_tuple_length = sizeof(struct range_data) / sizeof(u32);
+	if (length % per_tuple_length) {
+		pr_err("%s length (%d) should be multiple of %d\n",
+				prop_str, length, per_tuple_length);
+		return -EINVAL;
+	}
+	tuples = length / per_tuple_length;
+
+	if (tuples > MAX_STEP_CHG_ENTRIES) {
+		pr_err("too many entries(%d), only %d allowed\n",
+				tuples, MAX_STEP_CHG_ENTRIES);
+		return -EINVAL;
+	}
+
+	rc = of_property_read_u32_array(node, prop_str,
+			(u32 *)ranges, length);
+	if (rc) {
+		pr_err("Read %s failed, rc=%d\n", prop_str, rc);
+		return rc;
+	}
+
+	for (i = 0; i < tuples; i++) {
+		if (ranges[i].low_threshold >
+				ranges[i].high_threshold) {
+			pr_err("%s thresholds should be in ascendant ranges\n",
+						prop_str);
+			rc = -EINVAL;
+			goto clean;
+		}
+
+		if (i != 0) {
+			if (ranges[i - 1].high_threshold >
+					ranges[i].low_threshold) {
+				pr_err("%s thresholds should be in ascendant ranges\n",
+							prop_str);
+				rc = -EINVAL;
+				goto clean;
+			}
+		}
+
+		if (ranges[i].low_threshold > max_threshold)
+			ranges[i].low_threshold = max_threshold;
+		if (ranges[i].high_threshold > max_threshold)
+			ranges[i].high_threshold = max_threshold;
+		if (ranges[i].value > max_value)
+			ranges[i].value = max_value;
+	}
+
+	return rc;
+clean:
+	memset(ranges, 0, tuples * sizeof(struct range_data));
+	return rc;
 }

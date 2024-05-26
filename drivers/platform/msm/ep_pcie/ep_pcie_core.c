@@ -1244,7 +1244,6 @@ static void ep_pcie_config_inbound_iatu(struct ep_pcie_dev_t *dev, bool is_vf)
 
 	if (dev->phy_rev >= 6) {
 		ep_pcie_write_reg(dev->iatu, PCIE20_IATU_I_CTRL1(is_vf), 0x0);
-		ep_pcie_write_reg(dev->iatu, PCIE20_IATU_I_LTAR(is_vf), vf_lower);
 		ep_pcie_write_reg(dev->iatu, PCIE20_IATU_I_UTAR(is_vf), 0x0);
 
 		/*
@@ -1253,9 +1252,11 @@ static void ep_pcie_config_inbound_iatu(struct ep_pcie_dev_t *dev, bool is_vf)
 		 * to be matched with a single ATU region.
 		 */
 		if (is_vf) {
+			ep_pcie_write_reg(dev->iatu, PCIE20_IATU_I_LTAR(is_vf), vf_lower);
 			ep_pcie_write_reg(dev->iatu, PCIE20_IATU_I_CTRL2(is_vf),
 						BIT(31) | BIT(26));
 		} else {
+			ep_pcie_write_reg(dev->iatu, PCIE20_IATU_I_LTAR(is_vf), lower);
 			ep_pcie_write_reg(dev->iatu, PCIE20_IATU_I_CTRL2(is_vf),
 						BIT(31) | BIT(30) | BIT(19));
 		}
@@ -3555,8 +3556,6 @@ int ep_pcie_core_get_msi_config(struct ep_pcie_msi_config *cfg, u32 vf_id)
 	}
 
 	cap = readl_relaxed(dbi + PCIE20_MSI_CAP_ID_NEXT_CTRL(n));
-	EP_PCIE_DBG(&ep_pcie_dev, "PCIe V%d: MSI CAP:0x%x\n",
-			ep_pcie_dev.rev, cap);
 
 	if (!(cap & BIT(16))) {
 		EP_PCIE_ERR(&ep_pcie_dev,
@@ -3571,10 +3570,6 @@ int ep_pcie_core_get_msi_config(struct ep_pcie_msi_config *cfg, u32 vf_id)
 	upper = readl_relaxed(dbi + PCIE20_MSI_UPPER(n));
 	data = readl_relaxed(dbi + PCIE20_MSI_DATA(n));
 	ctrl_reg = readl_relaxed(dbi + PCIE20_MSI_CAP_ID_NEXT_CTRL(n));
-
-	EP_PCIE_DBG(&ep_pcie_dev,
-		"PCIe V%d: MSI info: lower:0x%x; upper:0x%x; data:0x%x vf_id:%d\n",
-		ep_pcie_dev.rev, lower, upper, data, vf_id);
 
 	if (ctrl_reg & BIT(16)) {
 		if (ep_pcie_dev.use_iatu_msi) {
@@ -3613,16 +3608,18 @@ int ep_pcie_core_get_msi_config(struct ep_pcie_msi_config *cfg, u32 vf_id)
 				EP_PCIE_DBG(&ep_pcie_dev,
 					"PCIe V%d: MSI config has been changed by host side for %d time(s)\n",
 					ep_pcie_dev.rev, changes);
-				EP_PCIE_DBG(&ep_pcie_dev,
-					"PCIe V%d: old MSI cfg: lower:0x%x; upper:0x%x; data:0x%x; msg_num:0x%x\n",
-					ep_pcie_dev.rev, msi_cfg->lower,
-					msi_cfg->upper,
-					msi_cfg->data,
-					msi_cfg->msg_num);
 				msi_cfg->lower = lower;
 				msi_cfg->upper = upper;
 				msi_cfg->data = data;
 				ep_pcie_dev.conf_ipa_msi_iatu[vf_id] = false;
+				EP_PCIE_DBG(&ep_pcie_dev, "PCIe V%d: MSI CAP:0x%x\n",
+					ep_pcie_dev.rev, cap);
+				EP_PCIE_DBG(&ep_pcie_dev,
+					"PCIe V%d: New MSI cfg: lower:0x%x; upper:0x%x; data:0x%x; msg_num:0x%x\n",
+					ep_pcie_dev.rev, msi_cfg->lower,
+					msi_cfg->upper,
+					msi_cfg->data,
+					msi_cfg->msg_num);
 			}
 			/*
 			 * All transactions originating from IPA have the RO

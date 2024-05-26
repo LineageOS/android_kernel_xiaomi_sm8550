@@ -912,7 +912,6 @@ struct pcie_i2c_reg_update {
 	u32 val;
 };
 
-
 /* i2c control interface for a i2c client device */
 struct pcie_i2c_ctrl {
 	struct i2c_client *client;
@@ -1337,6 +1336,11 @@ static int msm_pcie_set_link_width(struct msm_pcie_dev_t *pcie_dev,
 
 static void msm_pcie_disable(struct msm_pcie_dev_t *dev);
 static int msm_pcie_enable(struct msm_pcie_dev_t *dev);
+
+static int msm_pcie_pm_suspend(struct pci_dev *dev,
+				void *user, void *data, u32 options);
+static int msm_pcie_pm_resume(struct pci_dev *dev,
+				void *user, void *data, u32 options);
 
 static u32 msm_pcie_reg_copy(struct msm_pcie_dev_t *dev,
 		u8 *buf, u32 size, u8 reg_len,
@@ -5897,8 +5901,16 @@ int msm_pcie_enumerate(u32 rc_idx)
 	pci_save_state(pcidev);
 	dev->default_state = pci_store_saved_state(pcidev);
 
-	if (dev->boot_option & MSM_PCIE_NO_PROBE_ENUMERATION)
-		dev_pm_syscore_device(&pcidev->dev, true);
+	/*
+	 * If PCIe switch is present, don't register root-port
+	 * as a syscore device.
+	 */
+	if (!(dev->i2c_ctrl.client)) {
+		PCIE_ERR(dev, "PCIe: RC%d: Did not find PCIe switch.\n",
+			dev->rc_idx);
+		if (dev->boot_option & MSM_PCIE_NO_PROBE_ENUMERATION)
+			dev_pm_syscore_device(&pcidev->dev, true);
+	}
 out:
 	mutex_unlock(&dev->enumerate_lock);
 
@@ -8051,6 +8063,96 @@ invalid_link_width:
 	return -EINVAL;
 }
 
+int msm_pcie_retrain_port_link(struct pci_dev *ep_dev, u16 target_link_speed)
+{
+
+	int current_link_speed = 0;
+	bool link_trained = false;
+	int link_check_count = 0;
+	u32 max_link_speed = 0;
+	u16 link_status = 0;
+	u32 lnkcap = 0;
+	int ret = 0;
+
+	struct pci_dev *port_dev;
+	struct msm_pcie_dev_t *pcie_dev = PCIE_BUS_PRIV_DATA(ep_dev->bus);
+
+	port_dev = ep_dev->bus->self;
+	PCIE_DBG(pcie_dev, "Calling API to retrain Bus:0x%x DF:0x%x to Gen%d\n",
+			port_dev->bus->number, port_dev->devfn, target_link_speed);
+
+	pci_read_config_dword(port_dev, port_dev->pcie_cap + PCI_EXP_LNKCAP,
+			&lnkcap);
+
+	max_link_speed = lnkcap & PCI_EXP_LNKCAP_SLS;
+	PCIE_DBG(pcie_dev, "Max supported link speed by port is: %d\n", max_link_speed);
+
+	if (target_link_speed > max_link_speed) {
+		PCIE_DBG(pcie_dev, "Target link_speed is more than supported speed: %d\n",
+				max_link_speed);
+		return MSM_PCIE_ERROR;
+	}
+
+	msm_pcie_config_clear_set_dword(ep_dev,
+					ep_dev->pcie_cap +
+					PCI_EXP_LNKCTL2,
+					PCI_EXP_LNKCTL2_TLS,
+					target_link_speed);
+
+	msm_pcie_config_clear_set_dword(port_dev,
+					port_dev->pcie_cap +
+					PCI_EXP_LNKCTL2,
+					PCI_EXP_LNKCTL2_TLS,
+					target_link_speed);
+
+	/*re-train-link*/
+	msm_pcie_config_clear_set_dword(port_dev,
+					port_dev->pcie_cap + PCI_EXP_LNKCTL,
+					0, PCI_EXP_LNKCTL_RL);
+
+	PCIE_DBG(pcie_dev,
+		"PCIe: RC%d: DSP<->EP Link is retraining\n",
+		pcie_dev->rc_idx);
+
+		/* Wait for up to 100ms for the link to come up */
+		do {
+			usleep_range(LINK_UP_TIMEOUT_US_MIN,
+				     LINK_UP_TIMEOUT_US_MAX);
+			pci_read_config_word(port_dev,
+					     port_dev->pcie_cap + PCI_EXP_LNKSTA,
+					     &link_status);
+			if (lnkcap & PCI_EXP_LNKCAP_DLLLARC)
+				link_trained = (!(link_status &
+						  PCI_EXP_LNKSTA_LT)) &&
+						(link_status &
+						 PCI_EXP_LNKSTA_DLLLA);
+			else
+				link_trained = !(link_status &
+						 PCI_EXP_LNKSTA_LT);
+
+			if (link_trained)
+				break;
+		} while (link_check_count++ < LINK_CHECK_COUNT_MAX);
+
+		if (link_trained) {
+			PCIE_DBG(pcie_dev,
+				"PCIe: RC%d: DSP<->EP link status: 0x%04x\n",
+				pcie_dev->rc_idx, link_status);
+			PCIE_DBG(pcie_dev,
+				"PCIe: RC%d: DSP<->EP Link is up after %d checkings\n",
+				pcie_dev->rc_idx, link_check_count);
+			current_link_speed = link_status & PCI_EXP_LNKSTA_CLS;
+			PCIE_DBG(pcie_dev, "DSP<->EP link speed is: Gen%d\n", current_link_speed);
+		} else {
+			PCIE_DBG(pcie_dev, "DSP<->EP link initialization failed\n");
+			ret = MSM_PCIE_ERROR;
+		}
+
+	return 0;
+
+}
+EXPORT_SYMBOL_GPL(msm_pcie_retrain_port_link);
+
 int msm_pcie_dsp_link_control(struct pci_dev *pci_dev,
 			      bool link_enable)
 {
@@ -8444,106 +8546,142 @@ static int __maybe_unused msm_pcie_pm_suspend_noirq(struct device *dev)
 	PCIE_DBG(pcie_dev, "RC%d: entry\n", pcie_dev->rc_idx);
 
 	mutex_lock(&pcie_dev->recovery_lock);
-	if (pcie_dev->enumerated && pcie_dev->power_on &&
-				pcie_dev->apss_based_l1ss_sleep) {
+	if (pcie_dev->enumerated && pcie_dev->power_on) {
 
-		/* Wait till link to settle in L1ss */
-		ret_l1ss = readl_poll_timeout((pcie_dev->parf
-			+ PCIE20_PARF_PM_STTS), val, (val & BIT(8)), L1SS_POLL_INTERVAL_US,
-			L1SS_POLL_TIMEOUT_US);
+		if (pcie_dev->apss_based_l1ss_sleep) {
 
-		if (!ret_l1ss) {
-			PCIE_DBG(pcie_dev, "RC%d: Link is in L1ss\n",
-				pcie_dev->rc_idx);
-		} else {
-			PCIE_DBG(pcie_dev, "RC%d: Link is not in L1ss\n",
-				pcie_dev->rc_idx);
+			/* Wait till link to settle in L1ss */
+			ret_l1ss = readl_poll_timeout((pcie_dev->parf
+				+ PCIE20_PARF_PM_STTS), val, (val & BIT(8)), L1SS_POLL_INTERVAL_US,
+				L1SS_POLL_TIMEOUT_US);
 
-			mutex_unlock(&pcie_dev->recovery_lock);
+			if (!ret_l1ss) {
+				PCIE_DBG(pcie_dev, "RC%d: Link is in L1ss\n",
+					pcie_dev->rc_idx);
+			} else {
+				PCIE_DBG(pcie_dev, "RC%d: Link is not in L1ss\n",
+					pcie_dev->rc_idx);
 
-			PCIE_DBG(pcie_dev, "RC%d: exit\n", pcie_dev->rc_idx);
+				mutex_unlock(&pcie_dev->recovery_lock);
 
-			return 0;
+				PCIE_DBG(pcie_dev, "RC%d: exit\n", pcie_dev->rc_idx);
+
+				return 0;
+			}
+
+			/* Keep the device in power off state */
+			pcie_dev->power_on = false;
+
+			/* Set flag to indicate client has suspended */
+			pcie_dev->user_suspend = true;
+
+			/* Set flag to indicate device has suspended */
+			spin_lock_irqsave(&pcie_dev->irq_lock, irqsave_flags);
+			pcie_dev->suspending = true;
+			spin_unlock_irqrestore(&pcie_dev->irq_lock, irqsave_flags);
+
+			/* Restrict access to config space */
+			spin_lock_irqsave(&pcie_dev->cfg_lock,
+					pcie_dev->irqsave_flags);
+			pcie_dev->cfg_access = false;
+			spin_unlock_irqrestore(&pcie_dev->cfg_lock,
+					pcie_dev->irqsave_flags);
+
+			/* suspend access to MSI register. resume access in resume */
+			if (!pcie_dev->lpi_enable)
+				msm_msi_config_access(dev_get_msi_domain(&pcie_dev->dev->dev),
+						false);
+
+			/*
+			 * When GDSC is turned off, it will reset controller and it can assert
+			 * clk-req GPIO. With assertion of CLKREQ gpio, endpoint tries to bring
+			 * link back to L0, but since all clocks are turned off on host, this
+			 * can result in link down.
+			 *
+			 * So, release the control of CLKREQ gpio from controller by overriding it.
+			 */
+			msm_pcie_write_reg(pcie_dev->parf, PCIE20_PARF_CLKREQ_OVERRIDE,
+					PCIE20_PARF_CLKREQ_IN_ENABLE | PCIE20_PARF_CLKREQ_IN_VALUE);
+			if (pcie_dev->use_pinctrl && pcie_dev->pins_sleep)
+				pinctrl_select_state(pcie_dev->pinctrl,
+						pcie_dev->pins_sleep);
+
+			/* park the PCIe PHY in power down mode */
+			if (pcie_dev->phy_power_down_offset)
+				msm_pcie_write_reg(pcie_dev->phy,
+						pcie_dev->phy_power_down_offset, 0);
+
+			/* Disable all the clocks */
+			for (i = 0; i < pcie_dev->num_clk; i++)
+				if (pcie_dev->clk[i].hdl)
+					clk_disable_unprepare(pcie_dev->clk[i].hdl);
+
+			qcom_pcie_icc_bw_update(pcie_dev, 0, 0);
+
+			/* switch phy aux clock mux to xo before turning off gdsc-core */
+			if (pcie_dev->phy_aux_clk_mux && pcie_dev->ref_clk_src)
+				clk_set_parent(pcie_dev->phy_aux_clk_mux, pcie_dev->ref_clk_src);
+
+			/* switch pipe clock mux to xo before turning off gdsc */
+			if (pcie_dev->pipe_clk_mux && pcie_dev->ref_clk_src)
+				clk_set_parent(pcie_dev->pipe_clk_mux, pcie_dev->ref_clk_src);
+
+			/* disable the controller GDSC*/
+			regulator_disable(pcie_dev->gdsc_core);
+
+			/* Disable the pipe clock*/
+			msm_pcie_pipe_clk_deinit(pcie_dev);
+
+			/*
+			 * In certain GEN speeds PCIe driver is voting for NOM level for min
+			 * MX rail voltage level, due to this msm is seeing around 10mW high power
+			 * consumption.
+			 *
+			 * So, Set min MX rail voltage level to retention.
+			 */
+			rc = regulator_set_voltage(pcie_dev->mx_vreg->hdl,
+						RPMH_REGULATOR_LEVEL_RETENTION,
+						RPMH_REGULATOR_LEVEL_MAX);
+			if (rc)
+				PCIE_ERR(pcie_dev, "RC%d: Failed to set vmin of mx rail. ret %d.\n",
+					pcie_dev->rc_idx, rc);
+
+			/* Disable the voltage regulators*/
+			msm_pcie_vreg_deinit_analog_rails(pcie_dev);
 		}
 
-		/* Keep the device in power off state */
-		pcie_dev->power_on = false;
+		else {
+			/*
+			 * By default, during suspend/resume, pcie resources are being controlled
+			 * by client drivers. In some cases, pcie resources need to be controlled
+			 * by pcie driver itself. Added the necesarry calls in else case.
+			 */
 
-		/* Set flag to indicate client has suspended */
-		pcie_dev->user_suspend = true;
+			if (pcie_dev->link_status != MSM_PCIE_LINK_ENABLED ||
+					!pci_is_root_bus(pcie_dev->dev->bus)) {
+				mutex_unlock(&pcie_dev->recovery_lock);
+				return 0;
+			}
 
-		/* Set flag to indicate device has suspended */
-		spin_lock_irqsave(&pcie_dev->irq_lock, irqsave_flags);
-		pcie_dev->suspending = true;
-		spin_unlock_irqrestore(&pcie_dev->irq_lock, irqsave_flags);
+			spin_lock_irqsave(&pcie_dev->cfg_lock,
+						pcie_dev->irqsave_flags);
+			if (pcie_dev->disable_pc) {
+				PCIE_DBG(pcie_dev,
+					"RC%d: Skip suspend because of user request\n",
+					pcie_dev->rc_idx);
+				spin_unlock_irqrestore(&pcie_dev->cfg_lock,
+						pcie_dev->irqsave_flags);
+				mutex_unlock(&pcie_dev->recovery_lock);
+				return 0;
+			}
+			spin_unlock_irqrestore(&pcie_dev->cfg_lock,
+						pcie_dev->irqsave_flags);
 
-		/* Restrict access to config space */
-		spin_lock_irqsave(&pcie_dev->cfg_lock,
-				pcie_dev->irqsave_flags);
-		pcie_dev->cfg_access = false;
-		spin_unlock_irqrestore(&pcie_dev->cfg_lock,
-				pcie_dev->irqsave_flags);
-
-		/* suspend access to MSI register. resume access in resume */
-		if (!pcie_dev->lpi_enable)
-			msm_msi_config_access(dev_get_msi_domain(&pcie_dev->dev->dev),
-					false);
-
-		/*
-		 * When GDSC is turned off, it will reset controller and it can assert
-		 * clk-req GPIO. With assertion of CLKREQ gpio, endpoint tries to bring
-		 * link back to L0, but since all clocks are turned off on host, this
-		 * can result in link down.
-		 *
-		 * So, release the control of CLKREQ gpio from controller by overriding it.
-		 */
-		msm_pcie_write_reg(pcie_dev->parf, PCIE20_PARF_CLKREQ_OVERRIDE,
-					PCIE20_PARF_CLKREQ_IN_ENABLE | PCIE20_PARF_CLKREQ_IN_VALUE);
-		if (pcie_dev->use_pinctrl && pcie_dev->pins_sleep)
-			pinctrl_select_state(pcie_dev->pinctrl,
-					pcie_dev->pins_sleep);
-
-		/* park the PCIe PHY in power down mode */
-		if (pcie_dev->phy_power_down_offset)
-			msm_pcie_write_reg(pcie_dev->phy, pcie_dev->phy_power_down_offset, 0);
-
-		/* Disable all the clocks */
-		for (i = 0; i < pcie_dev->num_clk; i++)
-			if (pcie_dev->clk[i].hdl)
-				clk_disable_unprepare(pcie_dev->clk[i].hdl);
-
-		qcom_pcie_icc_bw_update(pcie_dev, 0, 0);
-
-		/* switch phy aux clock mux to xo before turning off gdsc-core */
-		if (pcie_dev->phy_aux_clk_mux && pcie_dev->ref_clk_src)
-			clk_set_parent(pcie_dev->phy_aux_clk_mux, pcie_dev->ref_clk_src);
-
-		/* switch pipe clock mux to xo before turning off gdsc */
-		if (pcie_dev->pipe_clk_mux && pcie_dev->ref_clk_src)
-			clk_set_parent(pcie_dev->pipe_clk_mux, pcie_dev->ref_clk_src);
-
-		/* disable the controller GDSC*/
-		regulator_disable(pcie_dev->gdsc_core);
-
-		/* Disable the pipe clock*/
-		msm_pcie_pipe_clk_deinit(pcie_dev);
-
-		/*
-		 * In certain GEN speeds PCIe driver is voting for NOM level for min
-		 * MX rail voltage level, due to this msm is seeing around 10mW high power
-		 * consumption.
-		 *
-		 * So, Set min MX rail voltage level to retention.
-		 */
-		rc = regulator_set_voltage(pcie_dev->mx_vreg->hdl,
-					RPMH_REGULATOR_LEVEL_RETENTION,
-					RPMH_REGULATOR_LEVEL_MAX);
-		if (rc)
-			PCIE_ERR(pcie_dev, "RC%d: Failed to set vmin of mx rail. ret %d.\n",
-				pcie_dev->rc_idx, rc);
-
-		/* Disable the voltage regulators*/
-		msm_pcie_vreg_deinit_analog_rails(pcie_dev);
+			rc = msm_pcie_pm_suspend(pcie_dev->dev, NULL, NULL, 0);
+			if (rc)
+				PCIE_ERR(pcie_dev, "PCIe: RC%d got failure in suspend:%d.\n",
+					pcie_dev->rc_idx, rc);
+		}
 	}
 
 	mutex_unlock(&pcie_dev->recovery_lock);
@@ -8566,104 +8704,128 @@ static int __maybe_unused msm_pcie_pm_resume_noirq(struct device *dev)
 
 	mutex_lock(&pcie_dev->recovery_lock);
 
-	if (pcie_dev->enumerated && !pcie_dev->power_on &&
-				pcie_dev->apss_based_l1ss_sleep) {
+	if (pcie_dev->enumerated && !pcie_dev->power_on) {
 
-		/* Enable the voltage regulators*/
-		msm_pcie_vreg_init_analog_rails(pcie_dev);
+		if (pcie_dev->apss_based_l1ss_sleep) {
 
-		/* Set the min MX rail voltage level based up on GEN speed */
-		bw_scale = &pcie_dev->bw_scale[index];
-		rc = regulator_set_voltage(pcie_dev->mx_vreg->hdl,
-				bw_scale->mx_vreg_min,
-				pcie_dev->mx_vreg->max_v);
-		if (rc)
-			PCIE_ERR(pcie_dev, "RC%d: Failed to set vmin of mx rail. ret %d.\n",
-				pcie_dev->rc_idx, rc);
+			/* Enable the voltage regulators*/
+			msm_pcie_vreg_init_analog_rails(pcie_dev);
 
-		/* Enable GDSC core */
-		rc = regulator_enable(pcie_dev->gdsc_core);
-		if (rc) {
-			PCIE_ERR(pcie_dev, "PCIe: fail to enable GDSC-CORE for RC%d (%s)\n",
-				pcie_dev->rc_idx, pcie_dev->pdev->name);
-			msm_pcie_vreg_deinit_analog_rails(pcie_dev);
-			mutex_unlock(&pcie_dev->recovery_lock);
-			return rc;
-		}
+			/* Set the min MX rail voltage level based up on GEN speed */
+			bw_scale = &pcie_dev->bw_scale[index];
+			rc = regulator_set_voltage(pcie_dev->mx_vreg->hdl,
+					bw_scale->mx_vreg_min,
+					pcie_dev->mx_vreg->max_v);
+			if (rc)
+				PCIE_ERR(pcie_dev, "RC%d: Failed to set vmin of mx rail. ret %d.\n",
+					pcie_dev->rc_idx, rc);
 
-		/* switch pipe clock source after gdsc-core is turned on */
-		if (pcie_dev->pipe_clk_mux && pcie_dev->pipe_clk_ext_src)
-			clk_set_parent(pcie_dev->pipe_clk_mux, pcie_dev->pipe_clk_ext_src);
-
-		rc = qcom_pcie_icc_bw_update(pcie_dev,
-			pcie_dev->current_link_speed, pcie_dev->current_link_width);
-		if (rc) {
-			PCIE_ERR(pcie_dev,
-				"PCIe: RC%d: failed to set ICC path vote. ret %d\n",
-				pcie_dev->rc_idx, rc);
-			if (pcie_dev->pipe_clk_ext_src && pcie_dev->pipe_clk_mux)
-				clk_set_parent(pcie_dev->pipe_clk_ext_src, pcie_dev->pipe_clk_mux);
-			regulator_disable(pcie_dev->gdsc_core);
-			msm_pcie_vreg_deinit_analog_rails(pcie_dev);
-			mutex_unlock(&pcie_dev->recovery_lock);
-			return rc;
-		}
-
-		/* Enable all clocks */
-		for (i = 0; i < pcie_dev->num_clk; i++) {
-			if (pcie_dev->clk[i].hdl) {
-				rc = clk_prepare_enable(pcie_dev->clk[i].hdl);
-				if (rc)
-					PCIE_ERR(pcie_dev, "PCIe: RC%d failed to enable clk %s\n",
-						pcie_dev->rc_idx, pcie_dev->clk[i].name);
-				else
-					PCIE_DBG2(pcie_dev, "enable clk %s for RC%d.\n",
-						pcie_dev->clk[i].name, pcie_dev->rc_idx);
+			/* Enable GDSC core */
+			rc = regulator_enable(pcie_dev->gdsc_core);
+			if (rc) {
+				PCIE_ERR(pcie_dev, "PCIe: fail to enable GDSC-CORE for RC%d (%s)\n",
+					pcie_dev->rc_idx, pcie_dev->pdev->name);
+				msm_pcie_vreg_deinit_analog_rails(pcie_dev);
+				mutex_unlock(&pcie_dev->recovery_lock);
+				return rc;
 			}
-		}
 
-		/* Enable pipe clocks */
-		for (i = 0; i < pcie_dev->num_pipe_clk; i++)
-			if (pcie_dev->pipe_clk[i].hdl)
-				clk_prepare_enable(pcie_dev->pipe_clk[i].hdl);
+			/* switch pipe clock source after gdsc-core is turned on */
+			if (pcie_dev->pipe_clk_mux && pcie_dev->pipe_clk_ext_src)
+				clk_set_parent(pcie_dev->pipe_clk_mux, pcie_dev->pipe_clk_ext_src);
 
-		/* switch phy aux clock source from xo to phy aux clk */
-		if (pcie_dev->phy_aux_clk_mux && pcie_dev->phy_aux_clk_ext_src)
-			clk_set_parent(pcie_dev->phy_aux_clk_mux, pcie_dev->phy_aux_clk_ext_src);
+			rc = qcom_pcie_icc_bw_update(pcie_dev,
+				pcie_dev->current_link_speed, pcie_dev->current_link_width);
+			if (rc) {
+				PCIE_ERR(pcie_dev,
+					"PCIe: RC%d: failed to set ICC path vote. ret %d\n",
+					pcie_dev->rc_idx, rc);
+				if (pcie_dev->pipe_clk_ext_src && pcie_dev->pipe_clk_mux)
+					clk_set_parent(pcie_dev->pipe_clk_ext_src,
+							pcie_dev->pipe_clk_mux);
+				regulator_disable(pcie_dev->gdsc_core);
+				msm_pcie_vreg_deinit_analog_rails(pcie_dev);
+				mutex_unlock(&pcie_dev->recovery_lock);
+				return rc;
+			}
 
-		/* Bring back PCIe PHY from power down */
-		if (pcie_dev->phy_power_down_offset)
-			msm_pcie_write_reg(pcie_dev->phy, pcie_dev->phy_power_down_offset,
+			/* Enable all clocks */
+			for (i = 0; i < pcie_dev->num_clk; i++) {
+				if (pcie_dev->clk[i].hdl) {
+					rc = clk_prepare_enable(pcie_dev->clk[i].hdl);
+					if (rc)
+						PCIE_ERR(pcie_dev,
+							"PCIe: RC%d failed to enable clk %s\n",
+							pcie_dev->rc_idx, pcie_dev->clk[i].name);
+					else
+						PCIE_DBG2(pcie_dev, "enable clk %s for RC%d.\n",
+							pcie_dev->clk[i].name, pcie_dev->rc_idx);
+				}
+			}
+
+			/* Enable pipe clocks */
+			for (i = 0; i < pcie_dev->num_pipe_clk; i++)
+				if (pcie_dev->pipe_clk[i].hdl)
+					clk_prepare_enable(pcie_dev->pipe_clk[i].hdl);
+
+			/* switch phy aux clock source from xo to phy aux clk */
+			if (pcie_dev->phy_aux_clk_mux && pcie_dev->phy_aux_clk_ext_src)
+				clk_set_parent(pcie_dev->phy_aux_clk_mux,
+					pcie_dev->phy_aux_clk_ext_src);
+
+			/* Bring back PCIe PHY from power down */
+			if (pcie_dev->phy_power_down_offset)
+				msm_pcie_write_reg(pcie_dev->phy, pcie_dev->phy_power_down_offset,
 					MSM_PCIE_PHY_SW_PWRDN | MSM_PCIE_PHY_REFCLK_DRV_DSB);
 
-		/* Disable the clkreq override functionality */
-		msm_pcie_write_reg(pcie_dev->parf, PCIE20_PARF_CLKREQ_OVERRIDE, 0x0);
-		if (pcie_dev->use_pinctrl && pcie_dev->pins_default)
-			pinctrl_select_state(pcie_dev->pinctrl,
-					pcie_dev->pins_default);
+			/* Disable the clkreq override functionality */
+			msm_pcie_write_reg(pcie_dev->parf, PCIE20_PARF_CLKREQ_OVERRIDE, 0x0);
+			if (pcie_dev->use_pinctrl && pcie_dev->pins_default)
+				pinctrl_select_state(pcie_dev->pinctrl,
+						pcie_dev->pins_default);
 
-		/* Keep the device in power on state */
-		pcie_dev->power_on = true;
+			/* Keep the device in power on state */
+			pcie_dev->power_on = true;
 
-		/* Clear flag to indicate client has resumed */
-		pcie_dev->user_suspend = false;
+			/* Clear flag to indicate client has resumed */
+			pcie_dev->user_suspend = false;
 
-		/* Clear flag to indicate device has resumed */
-		spin_lock_irqsave(&pcie_dev->irq_lock, irqsave_flags);
-		pcie_dev->suspending = false;
-		spin_unlock_irqrestore(&pcie_dev->irq_lock, irqsave_flags);
+			/* Clear flag to indicate device has resumed */
+			spin_lock_irqsave(&pcie_dev->irq_lock, irqsave_flags);
+			pcie_dev->suspending = false;
+			spin_unlock_irqrestore(&pcie_dev->irq_lock, irqsave_flags);
 
-		/* Allow access to config space */
-		spin_lock_irqsave(&pcie_dev->cfg_lock,
-				pcie_dev->irqsave_flags);
-		pcie_dev->cfg_access = true;
-		spin_unlock_irqrestore(&pcie_dev->cfg_lock,
-				pcie_dev->irqsave_flags);
+			/* Allow access to config space */
+			spin_lock_irqsave(&pcie_dev->cfg_lock,
+					pcie_dev->irqsave_flags);
+			pcie_dev->cfg_access = true;
+			spin_unlock_irqrestore(&pcie_dev->cfg_lock,
+					pcie_dev->irqsave_flags);
 
-		/* resume access to MSI register as link is resumed */
-		if (!pcie_dev->lpi_enable)
-			msm_msi_config_access(dev_get_msi_domain(&pcie_dev->dev->dev), true);
+			/* resume access to MSI register as link is resumed */
+			if (!pcie_dev->lpi_enable)
+				msm_msi_config_access(dev_get_msi_domain(&pcie_dev->dev->dev),
+							true);
 
+		}
+
+		else {
+			/*
+			 * By default, during suspend/resume, pcie resources are being controlled
+			 * by client drivers. In some cases, pcie resources need to be controlled
+			 * by pcie driver itself. Added the necessary calls in else case.
+			 */
+
+			if ((pcie_dev->link_status != MSM_PCIE_LINK_DISABLED) ||
+				pcie_dev->user_suspend || !pci_is_root_bus(pcie_dev->dev->bus)) {
+				mutex_unlock(&pcie_dev->recovery_lock);
+				return 0;
+			}
+			rc = msm_pcie_pm_resume(pcie_dev->dev, NULL, NULL, 0);
+			if (rc)
+				PCIE_ERR(pcie_dev, "PCIe: RC%d got failure in pcie resume:%d.\n",
+					pcie_dev->rc_idx, rc);
+		}
 	}
 
 	mutex_unlock(&pcie_dev->recovery_lock);

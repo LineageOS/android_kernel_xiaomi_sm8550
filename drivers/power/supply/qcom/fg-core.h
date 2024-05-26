@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __FG_CORE_H__
@@ -28,6 +28,8 @@
 #include <linux/uaccess.h>
 #include <linux/pmic-voter.h>
 #include "fg-iio.h"
+#include "fg-gen4-iio.h"
+#include "fg-alg.h"
 
 #define fg_dbg(fg, reason, fmt, ...)			\
 	do {							\
@@ -43,7 +45,7 @@
 		|| ((left) <= (right) && (left) <= (value) \
 			&& (value) <= (right)))
 
-#define PARAM(_id, _addr_word, _addr_byte, _len, _num, _den, _offset,	\
+#define FG_CORE_PARAM(_id, _addr_word, _addr_byte, _len, _num, _den, _offset,	\
 	      _enc, _dec)						\
 	[FG_SRAM_##_id] = {						\
 		.addr_word	= _addr_word,				\
@@ -510,6 +512,14 @@ struct fg_dev {
 #define KI_COEFF_SOC_LEVELS		3
 #define BATT_THERM_NUM_COEFFS		3
 
+#define FG_GEN4_SRAM_LEN			972
+#define FG_GEN4_PROFILE_LEN			416
+#define FG_GEN4_PROFILE_COMP_LEN		24
+#define FG_GEN4_KI_COEFF_MAX			15564
+#define FG_GEN4_SLOPE_LIMIT_COEFF_MAX		31128
+#define FG_GEN4_BATT_THERM_NUM_COEFFS		5
+#define ESR_CAL_LEVELS			2
+
 /* DT parameters for FG device */
 struct fg_dt_props {
 	bool	force_load_profile;
@@ -569,6 +579,60 @@ struct fg_dt_props {
 	u8      batt_therm_coeffs[BATT_THERM_NUM_COEFFS];
 };
 
+struct fg_gen4_dt_props {
+	bool	force_load_profile;
+	bool	hold_soc_while_full;
+	bool	linearize_soc;
+	bool	rapid_soc_dec_en;
+	bool	five_pin_battery;
+	bool	multi_profile_load;
+	bool	esr_calib_dischg;
+	bool	soc_hi_res;
+	bool	soc_scale_mode;
+	int	cutoff_volt_mv;
+	int	empty_volt_mv;
+	int	sys_min_volt_mv;
+	int	cutoff_curr_ma;
+	int	sys_term_curr_ma;
+	int	delta_soc_thr;
+	int	vbatt_scale_thr_mv;
+	int	scale_timer_ms;
+	int	force_calib_level;
+	int	esr_timer_chg_fast[NUM_ESR_TIMERS];
+	int	esr_timer_chg_slow[NUM_ESR_TIMERS];
+	int	esr_timer_dischg_fast[NUM_ESR_TIMERS];
+	int	esr_timer_dischg_slow[NUM_ESR_TIMERS];
+	u32	esr_cal_soc_thresh[ESR_CAL_LEVELS];
+	int	esr_cal_temp_thresh[ESR_CAL_LEVELS];
+	int	esr_filter_factor;
+	int	delta_esr_disable_count;
+	int	delta_esr_thr_uohms;
+	int	rconn_uohms;
+	int	batt_id_pullup_kohms;
+	int	batt_temp_cold_thresh;
+	int	batt_temp_hot_thresh;
+	int	batt_temp_hyst;
+	int	batt_temp_delta;
+	u32	batt_therm_freq;
+	int	esr_pulse_thresh_ma;
+	int	esr_meas_curr_ma;
+	int	slope_limit_temp;
+	int	ki_coeff_low_chg;
+	int	ki_coeff_med_chg;
+	int	ki_coeff_hi_chg;
+	int	ki_coeff_lo_med_chg_thr_ma;
+	int	ki_coeff_med_hi_chg_thr_ma;
+	int	ki_coeff_cutoff_gain;
+	int	ki_coeff_full_soc_dischg[2];
+	int	ki_coeff_soc[KI_COEFF_SOC_LEVELS];
+	int	ki_coeff_low_dischg[KI_COEFF_SOC_LEVELS];
+	int	ki_coeff_med_dischg[KI_COEFF_SOC_LEVELS];
+	int	ki_coeff_hi_dischg[KI_COEFF_SOC_LEVELS];
+	int	ki_coeff_lo_med_dchg_thr_ma;
+	int	ki_coeff_med_hi_dchg_thr_ma;
+	int	slope_limit_coeffs[SLOPE_LIMIT_NUM_COEFFS];
+};
+
 struct fg_gen3_chip {
 	struct fg_dev		fg;
 	struct fg_dt_props	dt;
@@ -595,6 +659,72 @@ struct fg_gen3_chip {
 	bool			slope_limit_en;
 };
 
+struct fg_gen4_chip {
+	struct fg_dev		fg;
+	struct fg_gen4_dt_props	dt;
+	struct iio_dev		*indio_dev;
+	struct iio_chan_spec	*iio_chan;
+	struct iio_channel		*int_iio_chans;
+	struct iio_channel		**ext_iio_chans;
+	struct iio_channel	*batt_id_chan;
+	struct cycle_counter	*counter;
+	struct cap_learning	*cl;
+	struct ttf		*ttf;
+	struct soh_profile	*sp;
+	struct device_node	*pbs_dev;
+	struct nvmem_device	*fg_nvmem;
+	struct votable		*delta_esr_irq_en_votable;
+	struct votable		*pl_disable_votable;
+	struct votable		*cp_disable_votable;
+	struct votable		*parallel_current_en_votable;
+	struct votable		*mem_attn_irq_en_votable;
+	struct votable		*fv_votable;
+	struct work_struct	esr_calib_work;
+	struct work_struct	soc_scale_work;
+	struct alarm		esr_fast_cal_timer;
+	struct alarm		soc_scale_alarm_timer;
+	struct delayed_work	pl_enable_work;
+	struct work_struct	pl_current_en_work;
+	struct completion	mem_attn;
+	struct mutex		soc_scale_lock;
+	struct mutex		esr_calib_lock;
+	ktime_t			last_restart_time;
+	char			batt_profile[FG_GEN4_PROFILE_LEN];
+	enum slope_limit_status	slope_limit_sts;
+	int			ki_coeff_full_soc[2];
+	int			delta_esr_count;
+	int			recharge_soc_thr;
+	int			esr_actual;
+	int			esr_nominal;
+	int			soh;
+	int			esr_soh_cycle_count;
+	int			batt_age_level;
+	int			last_batt_age_level;
+	int			soc_scale_msoc;
+	int			prev_soc_scale_msoc;
+	int			soc_scale_slope;
+	int			msoc_actual;
+	int			vbatt_avg;
+	int			vbatt_now;
+	int			vbatt_res;
+	int			scale_timer;
+	int			current_now;
+	int			calib_level;
+	bool			first_profile_load;
+	bool			ki_coeff_dischg_en;
+	bool			slope_limit_en;
+	bool			esr_fast_calib;
+	bool			esr_fast_calib_done;
+	bool			esr_fast_cal_timer_expired;
+	bool			esr_fast_calib_retry;
+	bool			esr_fcc_ctrl_en;
+	bool			esr_soh_notified;
+	bool			rslow_low;
+	bool			rapid_soc_dec_en;
+	bool			vbatt_low;
+	bool			chg_term_good;
+	bool			soc_scale_mode;
+};
 
 /* Debugfs data structures are below */
 
@@ -711,6 +841,8 @@ extern int fg_lerp(const struct fg_pt *pts, size_t tablesize, s32 input,
 void fg_stay_awake(struct fg_dev *fg, int awake_reason);
 void fg_relax(struct fg_dev *fg, int awake_reason);
 extern int fg_dma_mem_req(struct fg_dev *fg, bool request);
+extern bool fg_gen4_is_qnovo_en(struct fg_dev *fg);
+extern bool fg_gen4_is_parallel_charger_available(struct fg_dev *fg);
 
 /* IIO channel functions */
 bool is_chan_valid(struct fg_gen3_chip *chip,
@@ -722,4 +854,11 @@ int fg_gen3_write_iio_chan(struct fg_gen3_chip *chip,
 int fg_gen3_read_int_iio_chan(struct iio_channel *iio_chan_list, int chan_id,
 	int *val);
 
+int fg_gen4_read_iio_chan(struct fg_gen4_chip *chip, enum fg_gen4_ext_iio_channels chan, int *val);
+int fg_gen4_write_iio_chan(struct fg_gen4_chip *chip,
+	enum fg_gen4_ext_iio_channels chan, int val);
+bool is_chan_valid_fg_gen4(struct fg_gen4_chip *chip, enum fg_gen4_ext_iio_channels chan);
+int read_range_data_from_node(struct device_node *node,
+		const char *prop_str, struct range_data *ranges,
+		int max_threshold, u32 max_value);
 #endif

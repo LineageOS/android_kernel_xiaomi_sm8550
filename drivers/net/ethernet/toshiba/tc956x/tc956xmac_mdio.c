@@ -658,7 +658,16 @@ int tc956xmac_mdio_register(struct net_device *ndev)
 	new_bus->phy_mask = mdio_bus_data->phy_mask;
 	new_bus->parent = priv->device;
 #ifdef TC956X
-	err = mdiobus_register(new_bus);
+	if (!mdio_node) {
+		mdio_node = of_get_child_by_name(priv->device->of_node, "mdio");
+		priv->plat->mdio_node = mdio_node;
+	}
+	if (mdio_node) {
+		err = of_mdiobus_register(new_bus, mdio_node);
+		of_node_put(mdio_node);
+	} else {
+		err = mdiobus_register(new_bus);
+	}
 #else
 	err = of_mdiobus_register(new_bus, mdio_node);
 #endif
@@ -687,6 +696,7 @@ int tc956xmac_mdio_register(struct net_device *ndev)
 
 	for (addr = start_addr; addr < PHY_MAX_ADDR; addr++) {
 
+		struct phy_device *phydev = mdiobus_get_phy(new_bus, addr);
 #ifdef TC956X
 		int phy_reg_read;
 
@@ -704,8 +714,6 @@ int tc956xmac_mdio_register(struct net_device *ndev)
 					NMSGPR_ALERT(priv->device,
 					    "TC956X: [1] Phy detected C22 at ID/ADDR %d\n", addr);
 #else
-		struct phy_device *phydev = mdiobus_get_phy(new_bus, addr);
-
 		if (!phydev)
 			continue;
 #endif
@@ -732,6 +740,13 @@ int tc956xmac_mdio_register(struct net_device *ndev)
 			phy_attached_info(phydev);
 #endif
 			found = 1;
+
+#ifdef TC956X
+			if (phydev) {
+				NMSGPR_ALERT(priv->device,
+					     "TC956X: phy id 0x%x\n", phydev->phy_id);
+			}
+#endif
 			break;
 #ifdef TC956X
 			}
@@ -765,7 +780,8 @@ int tc956xmac_mdio_register(struct net_device *ndev)
 				phy_id = ((phy_reg_read1 << 16) | phy_reg_read2);
 				if (phy_id != 0x00000000 && phy_id != 0xffffffff) {
 					NMSGPR_ALERT(priv->device,
-							"TC956X: [2] Phy detected C45 at ID/ADDR %d\n", addr);
+							"Phy detected C45 at ID/ADDR %d, phy_id=0x%x\n",
+							addr, phy_id);
 
 #else
 					struct phy_device *phydev = mdiobus_get_phy(new_bus, addr);
