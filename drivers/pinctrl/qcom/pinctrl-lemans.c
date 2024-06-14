@@ -50,6 +50,8 @@
 		.oe_bit = 9,			\
 		.in_bit = 0,			\
 		.out_bit = 1,			\
+		.egpio_enable = 12,		\
+		.egpio_present = 11,		\
 		.intr_enable_bit = 0,		\
 		.intr_status_bit = 0,		\
 		.intr_target_bit = 5,		\

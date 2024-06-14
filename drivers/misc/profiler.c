@@ -44,6 +44,7 @@ struct profiler_control {
 	struct mutex lock;
 	void __iomem *llcc_base;
 	void __iomem *gemnoc_base;
+	void __iomem *mmnoc_base;
 };
 
 static struct profiler_control *profiler;
@@ -79,7 +80,6 @@ static int bw_profiling_command(const void *req)
 
 	memcpy(bw_shm.vaddr, req, req_size);
 	qtee_shmbridge_flush_shm_buf(&bw_shm);
-
 	switch (qseos_cmd_id) {
 	case TZ_BW_SVC_START_ID:
 	case TZ_BW_SVC_GET_ID:
@@ -153,10 +153,12 @@ static int bw_profiling_get(void __user *argp, struct tz_bw_svc_buf *bwbuf)
 
 	} else {
 		int ch = 0;
+		int hf = 0;
+		int sf = 0;
+		int gc = 0;
 		const int bufsize = sizeof(struct profiler_bw_cntrs_req)
 								- sizeof(uint32_t);
 		struct profiler_bw_cntrs_req cnt_buf;
-
 		ret = qtee_shmbridge_allocate_shm(PAGE_ALIGN(bufsize), &buf_shm);
 		if (ret) {
 			ret = -ENOMEM;
@@ -192,6 +194,29 @@ static int bw_profiling_get(void __user *argp, struct tz_bw_svc_buf *bwbuf)
 							+ offset_reg_values.cabo_offset[ch*2]);
 			cnt_buf.cabo_values[ch*2 + 1] = readl(profiler->llcc_base
 							+ offset_reg_values.cabo_offset[ch*2+1]);
+		}
+
+		profiler->gemnoc_base = devm_ioremap(profiler->pdev,
+							dev_params.gemnoc_base,
+							dev_params.gemnoc_map_size);
+		for (ch = 0; ch < dev_params.num_llcc_channels; ch++) {
+			for (gc = 0; gc < dev_params.num_gemnoc_metrics; gc++) {
+				cnt_buf.gemnoc_values[ch * dev_params.num_gemnoc_metrics + gc] =
+							readl(profiler->gemnoc_base
+							+ offset_reg_values.gemnoc_offset[
+								ch * dev_params.num_gemnoc_metrics
+							+ gc]);
+			}
+		}
+		profiler->mmnoc_base = devm_ioremap(profiler->pdev,
+						dev_params.mmnoc_base, dev_params.mmnoc_map_size);
+		for (hf = 0; hf < dev_params.num_hf_metrics; hf++) {
+			cnt_buf.mmnoc_hf_values[hf] = readl(profiler->mmnoc_base +
+							offset_reg_values.mmnoc_hf_offset[hf]);
+		}
+		for (sf = 0; sf < dev_params.num_sf_metrics; sf++) {
+			cnt_buf.mmnoc_sf_values[sf] = readl(profiler->mmnoc_base +
+							offset_reg_values.mmnoc_sf_offset[sf]);
 		}
 
 		/* Allocate memory for get buffer */
