@@ -438,6 +438,7 @@ struct msm_geni_serial_port {
 	struct uart_kpi_capture uart_kpi_tx[UART_KPI_TX_RX_INSTANCES];
 	struct uart_kpi_capture uart_kpi_rx[UART_KPI_TX_RX_INSTANCES];
 	enum uart_port_state port_state;
+	bool is_le_vm;
 };
 
 static const struct uart_ops msm_geni_serial_pops;
@@ -1387,6 +1388,9 @@ static int msm_geni_serial_power_on(struct uart_port *uport)
 	int ret = 0;
 	struct msm_geni_serial_port *port = GET_DEV_PORT(uport);
 
+	if (port->is_le_vm)
+		return 0;
+
 	if (!pm_runtime_enabled(uport->dev)) {
 		if (pm_runtime_status_suspended(uport->dev)) {
 			struct uart_state *state = uport->state;
@@ -1424,8 +1428,12 @@ static int msm_geni_serial_power_on(struct uart_port *uport)
 static void msm_geni_serial_power_off(struct uart_port *uport)
 {
 	struct msm_geni_serial_port *port = GET_DEV_PORT(uport);
-	int usage_count = atomic_read(&uport->dev->power.usage_count);
+	int usage_count;
 
+	if (port->is_le_vm)
+		return;
+
+	usage_count = atomic_read(&uport->dev->power.usage_count);
 	if (!usage_count) {
 		UART_LOG_DBG(port->ipc_log_pwr, uport->dev, "%s: Usage Count is already 0\n",
 								__func__);
@@ -4060,7 +4068,9 @@ static int msm_geni_serial_startup(struct uart_port *uport)
 		}
 	}
 
-	get_tx_fifo_size(msm_port);
+	if (!msm_port->is_le_vm)
+		get_tx_fifo_size(msm_port);
+
 	if (!msm_port->port_setup) {
 		ret = msm_geni_serial_port_setup(uport);
 		if (ret) {
@@ -4312,45 +4322,51 @@ static int msm_geni_serial_config_baud_rate(struct uart_port *uport,
 		uart_sampling /= 2;
 
 	desired_rate = baud * uart_sampling;
-
-	/*
-	 * Request for nearest possible required frequency instead of the exact
-	 * required frequency.
-	 */
-	ret = geni_se_clk_freq_match(&port->se, desired_rate,
-			&clk_idx, &clk_rate, false);
-	if (ret) {
-		dev_err(uport->dev, "%s: Failed(%d) to find src clk for 0x%x\n",
+	if (port->is_le_vm) {
+		ser_clk_cfg = geni_read_reg(uport->membase, GENI_SER_M_CLK_CFG);
+		clk_div = (ser_clk_cfg & CLK_DIV_MSK) >> CLK_DIV_SHFT;
+		UART_LOG_DBG(port->ipc_log_misc, uport->dev,
+			     "%s: clk_div: %d\n", __func__, clk_div);
+	} else {
+		/*
+		 * Request for nearest possible required frequency instead of the exact
+		 * required frequency.
+		 */
+		ret = geni_se_clk_freq_match(&port->se, desired_rate,
+					     &clk_idx, &clk_rate, false);
+		if (ret) {
+			dev_err(uport->dev, "%s: Failed(%d) to find src clk for 0x%x\n",
 				__func__, ret, baud);
-		msm_geni_update_uart_error_code(port, UART_ERROR_SE_CLK_RATE_FIND_FAIL);
-		return -EINVAL;
+			msm_geni_update_uart_error_code(port, UART_ERROR_SE_CLK_RATE_FIND_FAIL);
+			return -EINVAL;
+		}
+
+		clk_div = DIV_ROUND_UP(clk_rate, desired_rate);
+		if (clk_div <= 0)
+			return -EINVAL;
+
+		clk_freq_diff =  (desired_rate - (clk_rate / clk_div));
+		if (clk_freq_diff)
+			UART_LOG_DBG(port->ipc_log_misc, uport->dev,
+				     "%s: src_clk freq_diff:%d baud:%d clk_rate:%lu clk_div:%d\n",
+				     __func__, clk_freq_diff, baud, clk_rate, clk_div);
+
+		uport->uartclk = clk_rate;
+		ret = clk_set_rate(port->serial_rsc.se_clk, clk_rate);
+		if (ret) {
+			dev_err(uport->dev, "Error setting clock rate\n");
+			UART_LOG_DBG(port->ipc_log_misc, uport->dev,
+				     "%s: SE clock set_rate error:%d\n", __func__, ret);
+		}
+		ser_clk_cfg |= SER_CLK_EN;
+		ser_clk_cfg |= (clk_div << CLK_DIV_SHFT);
+
+		if (likely(baud))
+			uart_update_timeout(uport, termios->c_cflag, baud);
+
+		port->ser_clk_cfg = ser_clk_cfg;
+		msm_geni_enable_disable_se_clk(uport, true);
 	}
-
-	clk_div = DIV_ROUND_UP(clk_rate, desired_rate);
-	if (clk_div <= 0)
-		return -EINVAL;
-
-	clk_freq_diff =  (desired_rate - (clk_rate / clk_div));
-	if (clk_freq_diff)
-		UART_LOG_DBG(port->ipc_log_misc, uport->dev,
-			     "%s src_clk freq_diff:%d baud:%d clk_rate:%lu clk_div:%d\n",
-			     __func__, clk_freq_diff, baud, clk_rate, clk_div);
-
-	uport->uartclk = clk_rate;
-	ret = clk_set_rate(port->serial_rsc.se_clk, clk_rate);
-	if (ret) {
-		dev_err(uport->dev, "Error setting clock rate\n");
-		UART_LOG_DBG(port->ipc_log_misc, uport->dev,
-			     "%s: SE clock set_rate error:%d\n", __func__, ret);
-	}
-	ser_clk_cfg |= SER_CLK_EN;
-	ser_clk_cfg |= (clk_div << CLK_DIV_SHFT);
-
-	if (likely(baud))
-		uart_update_timeout(uport, termios->c_cflag, baud);
-
-	port->ser_clk_cfg = ser_clk_cfg;
-	msm_geni_enable_disable_se_clk(uport, true);
 
 	msm_geni_serial_termios_cfg(uport, termios, clk_div);
 	geni_capture_stop_time(&port->se, port->ipc_log_kpi, __func__,
@@ -5001,12 +5017,14 @@ static int msm_geni_serial_get_clk(struct platform_device *pdev,
 	int ret = 0;
 	struct device *dev = &pdev->dev;
 
-	dev_port->serial_rsc.se_clk = devm_clk_get(&pdev->dev, "se-clk");
-	if (IS_ERR(dev_port->serial_rsc.se_clk)) {
-		ret = PTR_ERR(dev_port->serial_rsc.se_clk);
-		dev_err(&pdev->dev, "Err getting SE Core clk %d\n", ret);
-		msm_geni_update_uart_error_code(dev_port, UART_ERROR_CLK_GET_FAIL);
-		return ret;
+	if (!dev_port->is_le_vm) {
+		dev_port->serial_rsc.se_clk = devm_clk_get(&pdev->dev, "se-clk");
+		if (IS_ERR(dev_port->serial_rsc.se_clk)) {
+			ret = PTR_ERR(dev_port->serial_rsc.se_clk);
+			dev_err(&pdev->dev, "Err getting SE Core clk %d\n", ret);
+			msm_geni_update_uart_error_code(dev_port, UART_ERROR_CLK_GET_FAIL);
+			return ret;
+		}
 	}
 
 	dev_port->serial_rsc.m_ahb_clk = devm_clk_get(dev->parent, "m-ahb");
@@ -5046,24 +5064,29 @@ static int msm_geni_serial_read_dtsi(struct platform_device *pdev,
 		dev_err(&pdev->dev, "SE Wrapper is NULL, deferring probe\n");
 		return -EPROBE_DEFER;
 	}
-	dev_port->se.clk = devm_clk_get(&pdev->dev, "se-clk");
 
-	if (IS_ERR(dev_port->se.clk)) {
-		ret = PTR_ERR(dev_port->se.clk);
-		dev_err(&pdev->dev, "Err getting SE Core clk %d\n", ret);
-		return ret;
-	}
+	dev_port->is_le_vm = of_property_read_bool(pdev->dev.of_node, "qcom,le-vm");
 
-	if (!is_console)
-		ret = geni_se_common_resources_init(&dev_port->se, UART_CORE2X_VOTE,
-						    APPS_PROC_TO_QUP_VOTE,
-						    (DEFAULT_SE_CLK * DEFAULT_BUS_WIDTH));
-	else
-		ret = geni_se_common_resources_init(&dev_port->se, GENI_DEFAULT_BW,
-						    GENI_DEFAULT_BW, GENI_DEFAULT_BW);
-	if (ret) {
-		msm_geni_update_uart_error_code(dev_port, UART_ERROR_SE_RESOURCES_INIT_FAIL);
-		return ret;
+	if (!dev_port->is_le_vm) {
+		dev_port->se.clk = devm_clk_get(&pdev->dev, "se-clk");
+		if (IS_ERR(dev_port->se.clk)) {
+			ret = PTR_ERR(dev_port->se.clk);
+			dev_err(&pdev->dev, "Err getting SE Core clk %d\n", ret);
+			return ret;
+		}
+
+		if (!is_console)
+			ret = geni_se_common_resources_init(&dev_port->se, UART_CORE2X_VOTE,
+							    APPS_PROC_TO_QUP_VOTE,
+							    (DEFAULT_SE_CLK * DEFAULT_BUS_WIDTH));
+		else
+			ret = geni_se_common_resources_init(&dev_port->se, GENI_DEFAULT_BW,
+							    GENI_DEFAULT_BW, GENI_DEFAULT_BW);
+		if (ret) {
+			msm_geni_update_uart_error_code(dev_port,
+							UART_ERROR_SE_RESOURCES_INIT_FAIL);
+			return ret;
+		}
 	}
 
 	/* RUMI specific */
@@ -5098,17 +5121,18 @@ static int msm_geni_serial_read_dtsi(struct platform_device *pdev,
 	}
 	dev_port->se.base = uport->membase;
 
-	ret = msm_geni_serial_get_irq_pinctrl(pdev, dev_port);
-	if (ret)
-		return ret;
+	if (!dev_port->is_le_vm) {
+		ret = msm_geni_serial_get_irq_pinctrl(pdev, dev_port);
+		if (ret)
+			return ret;
 
-	if (!is_console) {
-		dev_port->geni_wake = wakeup_source_register(uport->dev,
-						dev_name(&pdev->dev));
-		if (!dev_port->geni_wake) {
-			dev_err(&pdev->dev,
-				"Failed to register wakeup_source\n");
-			return -ENOMEM;
+		if (!is_console) {
+			dev_port->geni_wake = wakeup_source_register(uport->dev,
+								     dev_name(&pdev->dev));
+			if (!dev_port->geni_wake) {
+				dev_err(&pdev->dev, "Failed to register wakeup_source\n");
+				return -ENOMEM;
+			}
 		}
 	}
 
@@ -5121,10 +5145,12 @@ static int msm_geni_serial_port_init(struct platform_device *pdev,
 	int ret = 0;
 	struct uart_port *uport = &dev_port->uport;
 
-	ret = msm_geni_serial_get_ver_info(uport);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to Read FW ver: %d\n", ret);
-		return ret;
+	if (!dev_port->is_le_vm) {
+		ret = msm_geni_serial_get_ver_info(uport);
+		if (ret) {
+			dev_err(&pdev->dev, "Failed to Read FW ver: %d\n", ret);
+			return ret;
+		}
 	}
 
 	dev_port->tx_fifo_depth = DEF_FIFO_DEPTH_WORDS;
@@ -5398,11 +5424,14 @@ static int msm_geni_serial_runtime_suspend(struct device *dev)
 	struct msm_geni_serial_port *port = platform_get_drvdata(pdev);
 	int ret = 0, count = 0;
 	unsigned long long start_time;
-	u32 geni_status = geni_read_reg(port->uport.membase,
-							SE_GENI_STATUS);
+	u32 geni_status;
 
+	if (port->is_le_vm)
+		return 0;
+
+	geni_status = geni_read_reg(port->uport.membase, SE_GENI_STATUS);
 	UART_LOG_DBG(port->ipc_log_pwr, dev,
-		"%s: Start geni_status : 0x%x\n", __func__, geni_status);
+		     "%s: Start geni_status : 0x%x\n", __func__, geni_status);
 
 	start_time = geni_capture_start_time(&port->se, port->ipc_log_kpi,
 					     __func__, port->uart_kpi);
@@ -5520,8 +5549,10 @@ static int msm_geni_serial_runtime_resume(struct device *dev)
 	int ret = 0;
 	unsigned long long start_time;
 
-	UART_LOG_DBG(port->ipc_log_pwr, dev, "%s: Start %d\n", __func__, true);
+	if (port->is_le_vm)
+		return 0;
 
+	UART_LOG_DBG(port->ipc_log_pwr, dev, "%s: Start %d\n", __func__, true);
 	start_time = geni_capture_start_time(&port->se, port->ipc_log_kpi,
 					     __func__, port->uart_kpi);
 	/*
