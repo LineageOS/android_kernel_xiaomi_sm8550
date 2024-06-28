@@ -4060,7 +4060,7 @@ static int __maybe_unused arm_smmu_runtime_suspend(struct device *dev)
 	return 0;
 }
 
-static int __maybe_unused arm_smmu_pm_resume_common(struct device *dev)
+static int __maybe_unused arm_smmu_pm_resume(struct device *dev)
 {
 	int ret;
 	struct arm_smmu_device *smmu = dev_get_drvdata(dev);
@@ -4119,7 +4119,7 @@ static int __maybe_unused arm_smmu_pm_restore_early(struct device *dev)
 		smmu_domain->pgtbl_ops = pgtbl_ops;
 		arm_smmu_init_context_bank(smmu_domain, pgtbl_cfg);
 	}
-	ret = arm_smmu_pm_resume_common(dev);
+	ret = arm_smmu_pm_resume(dev);
 	if (ret) {
 		dev_err(dev, "Failed to resume\n");
 		return ret;
@@ -4176,9 +4176,6 @@ static int __maybe_unused arm_smmu_pm_suspend(struct device *dev)
 	int ret = 0;
 	struct arm_smmu_device *smmu = dev_get_drvdata(dev);
 
-	if (pm_suspend_via_firmware())
-		return arm_smmu_pm_freeze_late(dev);
-
 	if (pm_runtime_suspended(dev))
 		goto clk_unprepare;
 
@@ -4189,14 +4186,6 @@ static int __maybe_unused arm_smmu_pm_suspend(struct device *dev)
 clk_unprepare:
 	clk_bulk_unprepare(smmu->num_clks, smmu->clks);
 	return ret;
-}
-
-static int __maybe_unused arm_smmu_pm_resume(struct device *dev)
-{
-	if (pm_suspend_via_firmware())
-		return arm_smmu_pm_restore_early(dev);
-	else
-		return arm_smmu_pm_resume_common(dev);
 }
 
 static const struct dev_pm_ops arm_smmu_pm_ops = {
