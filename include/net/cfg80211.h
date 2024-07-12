@@ -411,6 +411,23 @@ struct ieee80211_sta_eht_cap {
 	struct ieee80211_eht_mcs_nss_supp eht_mcs_nss_supp;
 	u8 eht_ppe_thres[IEEE80211_EHT_PPE_THRES_MAX_LEN];
 };
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+/**
+ * struct ieee80211_sta_eht_cap - STA's EHT capabilities
+ *
+ * This structure describes most essential parameters needed
+ * to describe 802.11be EHT capabilities for a STA.
+ *
+ * @has_eht: true if EHT data is valid.
+ * @eht_cap_elem: Fixed portion of the EHTcapabilities element.
+ * @eht_mcs_nss_supp: The supported NSS/MCS combinations.
+ */
+struct ieee80211_sta_eht_cap {
+	bool has_eht;
+	struct ieee80211_eht_cap_elem eht_cap_elem;
+	struct ieee80211_eht_mcs_nss_supp eht_mcs_nss_supp;
+};
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 /**
  * struct ieee80211_sband_iftype_data - sband data per interface type
@@ -448,45 +465,6 @@ struct ieee80211_sband_iftype_data {
 	ANDROID_VENDOR_DATA(3);
 	ANDROID_VENDOR_DATA(4);
 };
-#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
-/**
- * struct ieee80211_sta_eht_cap - STA's EHT capabilities
- *
- * This structure describes most essential parameters needed
- * to describe 802.11be EHT capabilities for a STA.
- *
- * @has_eht: true if EHT data is valid.
- * @eht_cap_elem: Fixed portion of the EHTcapabilities element.
- * @eht_mcs_nss_supp: The supported NSS/MCS combinations.
- */
-struct ieee80211_sta_eht_cap {
-	bool has_eht;
-	struct ieee80211_eht_cap_elem eht_cap_elem;
-	struct ieee80211_eht_mcs_nss_supp eht_mcs_nss_supp;
-};
-
-/**
- * struct ieee80211_sband_iftype_data - sband data per interface type
- *
- * This structure encapsulates sband data that is relevant for the
- * interface types defined in @types_mask.  Each type in the
- * @types_mask must be unique across all instances of iftype_data.
- *
- * @types_mask: interface types mask
- * @he_cap: holds the HE capabilities
- * @eht_cap: holds the EHT capabilities.
- */
-struct ieee80211_sband_iftype_data {
-	u16 types_mask;
-	struct ieee80211_sta_he_cap he_cap;
-	struct ieee80211_he_6ghz_capa he_6ghz_capa;
-	struct ieee80211_sta_eht_cap eht_cap;
-	struct {
-		const u8 *data;
-		unsigned int len;
-	} vendor_elems;
-};
-#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 /**
  * enum ieee80211_edmg_bw_config - allowed channel bandwidth configurations
@@ -1947,7 +1925,6 @@ struct station_parameters {
  * @eht_capa_len: the length of the EHT capabilities
  */
 struct station_parameters {
-	const u8 *supported_rates;
 	struct net_device *vlan;
 	u32 sta_flags_mask, sta_flags_set;
 	u32 sta_modify_mask;
@@ -1955,11 +1932,8 @@ struct station_parameters {
 	u16 aid;
 	u16 vlan_id;
 	u16 peer_aid;
-	u8 supported_rates_len;
 	u8 plink_action;
 	u8 plink_state;
-	const struct ieee80211_ht_cap *ht_capa;
-	const struct ieee80211_vht_cap *vht_capa;
 	u8 uapsd_queues;
 	u8 max_sp;
 	enum nl80211_mesh_power_mode local_pm;
@@ -1970,16 +1944,9 @@ struct station_parameters {
 	u8 supported_channels_len;
 	const u8 *supported_oper_classes;
 	u8 supported_oper_classes_len;
-	u8 opmode_notif;
-	bool opmode_notif_used;
 	int support_p2p_ps;
-	const struct ieee80211_he_cap_elem *he_capa;
-	u8 he_capa_len;
 	u16 airtime_weight;
-	struct sta_txpwr txpwr;
-	const struct ieee80211_he_6ghz_capa *he_6ghz_capa;
-	const struct ieee80211_eht_cap_elem *eht_capa;
-	u8 eht_capa_len;
+	struct link_station_parameters link_sta_params;
 };
 #endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
