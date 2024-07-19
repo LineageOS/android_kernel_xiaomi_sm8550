@@ -3204,6 +3204,7 @@ include/linux/perf_regs.h
 include/linux/personality.h
 include/linux/pfn.h
 include/linux/pfn_t.h
+include/linux/pgsize_migration.h
 include/linux/pgtable.h
 include/linux/phy_fixed.h
 include/linux/phy.h
@@ -3679,6 +3680,9 @@ include/media/videobuf2-memops.h
 include/media/videobuf2-v4l2.h
 include/media/videobuf2-vmalloc.h
 include/net/6lowpan.h
+include/net/9p/9p.h
+include/net/9p/client.h
+include/net/9p/transport.h
 include/net/act_api.h
 include/net/addrconf.h
 include/net/af_ieee802154.h
@@ -3969,6 +3973,7 @@ include/sound/timer.h
 include/sound/tlv.h
 include/trace/bpf_probe.h
 include/trace/define_trace.h
+include/trace/events/9p.h
 include/trace/events/alarmtimer.h
 include/trace/events/android_fs.h
 include/trace/events/android_fs_template.h
@@ -5256,6 +5261,7 @@ mm/percpu.c
 mm/percpu-internal.h
 mm/percpu-vm.c
 mm/pgalloc-track.h
+mm/pgsize_migration.c
 mm/pgtable-generic.c
 mm/process_vm_access.c
 mm/readahead.c
@@ -5307,6 +5313,14 @@ net/8021q/vlanproc.h
 net/802/p8022.c
 net/802/psnap.c
 net/802/stp.c
+net/9p/client.c
+net/9p/error.c
+net/9p/mod.c
+net/9p/protocol.c
+net/9p/protocol.h
+net/9p/trans_common.c
+net/9p/trans_common.h
+net/9p/trans_fd.c
 net/bluetooth/a2mp.h
 net/bluetooth/af_bluetooth.c
 net/bluetooth/amp.h

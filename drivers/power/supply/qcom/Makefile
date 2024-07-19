@@ -13,7 +13,11 @@ qpnp-fg-gen4-main-y	+= qpnp-fg-gen4.o fg-alg.o fg-memif.o fg-util.o battery-prof
 obj-$(CONFIG_QPNP_QG)	+= qcom-qpnp-qg.o
 qcom-qpnp-qg-y	+= qpnp-qg.o battery-profile-loader.o qg-util.o qg-soc.o qg-sdam.o qg-battery-profile.o qg-profile-lib.o fg-alg.o
 obj-$(CONFIG_QPNP_SMBLITE) += qpnp-smblite-main.o
+ifdef CONFIG_QPNP_SMB5
+qpnp-smblite-main-y += step-chg-jeita.o battery.o qpnp-smblite.o smblite-lib.o storm-watch.o battery-profile-loader.o schgm-flashlite.o smblite-iio.o smbx-get-chan.o smblite-remote-bms.o
+else
 qpnp-smblite-main-y += step-chg-jeita.o battery.o qpnp-smblite.o smblite-lib.o pmic-voter.o storm-watch.o battery-profile-loader.o schgm-flashlite.o smblite-iio.o smbx-get-chan.o smblite-remote-bms.o
+endif
 obj-$(CONFIG_SMB1398_CHARGER)           += qcom-smb1398-charger.o
 qcom-smb1398-charger-y += smb1398-charger.o
 obj-$(CONFIG_SMB1355_SLAVE_CHARGER)	+= qcom-smb1355-charger.o

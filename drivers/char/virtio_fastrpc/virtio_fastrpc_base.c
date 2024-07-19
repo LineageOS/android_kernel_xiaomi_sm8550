@@ -549,6 +549,11 @@ int fastrpc_dspsignal_destroy(struct fastrpc_file *fl,
 	return -ENOTTY;
 }
 
+int fastrpc_check_pd_status(struct fastrpc_file *fl, char *sloc_name)
+{
+	return -ENOTTY;
+}
+
 int fastrpc_internal_mem_unmap(struct fastrpc_file *fl,
 				struct fastrpc_ioctl_mem_unmap *ud)
 {

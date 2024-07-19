@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -92,6 +92,7 @@ struct gdsc {
 	struct icc_path		**paths;
 	bool			toggle_logic;
 	bool			retain_ff_enable;
+	bool			retain_ff_disable;
 	bool			resets_asserted;
 	bool			root_en;
 	bool			force_root_en;
@@ -516,6 +517,10 @@ static int gdsc_disable(struct regulator_dev *rdev)
 		} else {
 			regmap_read(sc->regmap, REG_OFFSET, &regval);
 			regval |= SW_COLLAPSE_MASK;
+
+			if (sc->retain_ff_disable)
+				regval &= ~RETAIN_FF_ENABLE_MASK;
+
 			regmap_write(sc->regmap, REG_OFFSET, regval);
 		}
 
@@ -908,6 +913,8 @@ static int gdsc_parse_dt_data(struct gdsc *sc, struct device *dev,
 					"qcom,no-status-check-on-disable");
 	sc->retain_ff_enable = of_property_read_bool(dev->of_node,
 						"qcom,retain-regs");
+	sc->retain_ff_disable = of_property_read_bool(dev->of_node,
+						"qcom,clear-retain-regs");
 	sc->skip_disable_before_enable = of_property_read_bool(dev->of_node,
 					"qcom,skip-disable-before-sw-enable");
 
