@@ -177,7 +177,7 @@ enum xm_property_id {
 	XM_PROP_VBUS_DISABLE,
 	XM_PROP_REAL_TYPE,
 	/*used for pd authentic*/
-	XM_PROP_VERIFY_PROCESS,
+	XM_PROP_VERIFY_PROCESS = 10,
 	XM_PROP_VDM_CMD_CHARGER_VERSION,
 	XM_PROP_VDM_CMD_CHARGER_VOLTAGE,
 	XM_PROP_VDM_CMD_CHARGER_TEMP,
@@ -211,7 +211,7 @@ enum xm_property_id {
 	XM_PROP_INPUT_SUSPEND,
 	XM_PROP_FASTCHGMODE,
 	XM_PROP_NIGHT_CHARGING,
-	XM_PROP_SOC_DECIMAL,
+	XM_PROP_SOC_DECIMAL = 45,
 	XM_PROP_SOC_DECIMAL_RATE,
 	XM_PROP_QUICK_CHARGE_TYPE,
 	XM_PROP_APDO_MAX,
@@ -220,7 +220,7 @@ enum xm_property_id {
 	XM_PROP_SLAVE_DIE_TEMPERATURE,
 	/* wireless charge infor */
 	XM_PROP_WLS_START = 50,
-	XM_PROP_TX_MACL,
+	XM_PROP_TX_MACL = 53,
 	XM_PROP_TX_MACH,
 	XM_PROP_RX_CRL,
 	XM_PROP_RX_CRH,
@@ -245,7 +245,7 @@ enum xm_property_id {
 	XM_PROP_WLS_FC_FLAG,
 	XM_PROP_WLS_END = 80,
 	/**********************/
-	XM_PROP_SHUTDOWN_DELAY,
+	XM_PROP_SHUTDOWN_DELAY = 89,
 	XM_PROP_FAKE_TEMP,
 	XM_PROP_THERMAL_REMOVE,
 	XM_PROP_TYPEC_MODE,
@@ -283,7 +283,7 @@ enum xm_property_id {
 	XM_PROP_GET_LEARNING_POWER_DEV_B,
 	/*********nvt fuelgauge feature*********/
 	/*fuelgauge test node*/
-	XM_PROP_FG1_QMAX,
+	XM_PROP_FG1_QMAX = 131,
 	XM_PROP_FG1_RM,
 	XM_PROP_FG1_FCC,
 	XM_PROP_FG1_SOH,
@@ -308,7 +308,7 @@ enum xm_property_id {
 	XM_PROP_FG1_SEAL_STATE,
 	XM_PROP_FG1_DF_CHECK,
 	/*end dual fuel high temperature intercept feature*/
-	XM_PROP_FG_VENDOR_ID,
+	XM_PROP_FG_VENDOR_ID = 198,
 	XM_PROP_MAX,
 };
 
