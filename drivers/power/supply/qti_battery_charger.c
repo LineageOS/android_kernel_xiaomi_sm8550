@@ -1105,6 +1105,66 @@ static void handle_message(struct battery_chg_dev *bcdev, void *data,
 
 static struct power_supply_desc usb_psy_desc;
 
+#define FG_SOC_THRESHOLD 90
+/*
+ *	Calculates the weighted average of batt_soc and xm_soc:
+ *	If batt_soc <= FG_SOC_THRESHOLD -> returns xm_soc
+ *	Otherwise -> returns the weighted average, so that as batt_soc approaches the threshold, the
+ *	returned value approaches to xm_soc
+ */
+static u32 xm_calculate_soc(u32 batt_soc, u32 xm_soc) {
+	u32 range, batt_diff;
+
+	range = 100 - FG_SOC_THRESHOLD;
+	batt_diff = batt_soc - FG_SOC_THRESHOLD;
+
+	if (batt_soc <= FG_SOC_THRESHOLD)
+		return xm_soc;
+
+	return mult_frac(batt_soc, batt_diff, range) + mult_frac(xm_soc, range - batt_diff, range);
+}
+
+static u32 xm_get_battery_capacity(struct battery_chg_dev *bcdev) {
+	struct psy_state *pst;
+	struct psy_state *xm_pst;
+	u32 batt_soc, xm_soc, ret_soc;
+	int rc;
+
+	if (!bcdev) {
+		pr_err("bcdev is null");
+		return 0;
+	}
+
+	pst = &bcdev->psy_list[PSY_TYPE_BATTERY];
+	xm_pst = &bcdev->psy_list[PSY_TYPE_XM];
+
+	if (!pst || !xm_pst) {
+		pr_err("pst and/or xm_pst is null");
+		return 0;
+	}
+
+	rc = read_property_id(bcdev, pst, BATT_CAPACITY);
+	if (rc < 0) {
+		pr_err("Could not read BATT_CAPACITY from pst");
+		return 0;
+	}
+
+	rc = read_property_id(bcdev, xm_pst, XM_PROP_FG1_RSOC);
+	if (rc < 0) {
+		pr_err("Could not read XM_PROP_FG1_RSOC from xm_pst");
+		return 0;
+	}
+
+	batt_soc = DIV_ROUND_CLOSEST(pst->prop[BATT_CAPACITY], 100);
+	xm_soc = xm_pst->prop[XM_PROP_FG1_RSOC];
+
+	ret_soc = xm_calculate_soc(batt_soc, xm_soc);
+
+	pr_info("batt_soc %d, xm_soc %d, ret_soc %d", batt_soc, xm_soc, ret_soc);
+
+	return ret_soc;
+}
+
 static void battery_chg_update_usb_type_work(struct work_struct *work)
 {
 	struct battery_chg_dev *bcdev = container_of(work,
@@ -1189,13 +1249,7 @@ static void battery_chg_check_status_work(struct work_struct *work)
 		return;
 	}
 
-	rc = read_property_id(bcdev, pst, BATT_CAPACITY);
-	if (rc < 0) {
-		pr_err("Failed to read BATT_CAPACITY, rc=%d\n", rc);
-		return;
-	}
-
-	if (DIV_ROUND_CLOSEST(pst->prop[BATT_CAPACITY], 100) > 0) {
+	if (xm_get_battery_capacity(bcdev) > 0) {
 		pr_debug("Battery SOC is > 0\n");
 		return;
 	}
@@ -1891,7 +1945,7 @@ static int battery_psy_get_prop(struct power_supply *psy,
 		pval->strval = pst->model;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		pval->intval = DIV_ROUND_CLOSEST(pst->prop[prop_id], 100);
+		pval->intval = xm_get_battery_capacity(bcdev);
 		if (IS_ENABLED(CONFIG_QTI_PMIC_GLINK_CLIENT_DEBUG) &&
 		   (bcdev->fake_soc >= 0 && bcdev->fake_soc <= 100))
 			pval->intval = bcdev->fake_soc;
@@ -2205,11 +2259,7 @@ static int wireless_fw_update(struct battery_chg_dev *bcdev, bool force)
 
 	if (!pst->prop[USB_ONLINE]) {
 		pst = &bcdev->psy_list[PSY_TYPE_BATTERY];
-		rc = read_property_id(bcdev, pst, BATT_CAPACITY);
-		if (rc < 0)
-			goto out;
-
-		if ((pst->prop[BATT_CAPACITY] / 100) < 50) {
+		if (xm_get_battery_capacity(bcdev) < 50) {
 			pr_err("Battery SOC should be at least 50%% or connect charger\n");
 			rc = -EINVAL;
 			goto out;
@@ -4874,12 +4924,10 @@ static void xm_batt_update_work(struct work_struct *work)
 {
 	struct battery_chg_dev *bcdev = container_of(work, struct battery_chg_dev, batt_update_work.work);
 	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
-	struct psy_state *batt_pst = &bcdev->psy_list[PSY_TYPE_BATTERY];
 	int interval = BATT_UPDATE_PERIOD_10S;
 	int rc = 0;
 
-	rc = read_property_id(bcdev, batt_pst, BATT_CAPACITY);
-	if ((batt_pst->prop[BATT_CAPACITY] / 100) < 15)
+	if (xm_get_battery_capacity(bcdev) < 15)
 		interval = BATT_UPDATE_PERIOD_8S;
 	rc = read_property_id(bcdev, pst, XM_PROP_THERMAL_TEMP);
 	if (bcdev->blank_state)
