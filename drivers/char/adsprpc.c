@@ -1801,7 +1801,7 @@ static int context_alloc(struct fastrpc_file *fl, uint32_t kernel,
 	}
 
 	if (invokefd->fds) {
-		K_COPY_FROM_USER(err, kernel, ctx->fds, invokefd->fds,
+		K_COPY_FROM_USER(err, kernel_msg, ctx->fds, invokefd->fds,
 						bufs * sizeof(*ctx->fds));
 		if (err) {
 			ADSPRPC_ERR(
@@ -1814,7 +1814,7 @@ static int context_alloc(struct fastrpc_file *fl, uint32_t kernel,
 		ctx->fds = NULL;
 	}
 	if (invokefd->attrs) {
-		K_COPY_FROM_USER(err, kernel, ctx->attrs, invokefd->attrs,
+		K_COPY_FROM_USER(err, kernel_msg, ctx->attrs, invokefd->attrs,
 						bufs * sizeof(*ctx->attrs));
 		if (err) {
 			ADSPRPC_ERR(
@@ -1861,7 +1861,7 @@ static int context_alloc(struct fastrpc_file *fl, uint32_t kernel,
 		ctx->perf->tid = fl->tgid;
 	}
 	if (invokefd->job) {
-		K_COPY_FROM_USER(err, kernel, &ctx->asyncjob, invokefd->job,
+		K_COPY_FROM_USER(err, kernel_msg, &ctx->asyncjob, invokefd->job,
 						sizeof(ctx->asyncjob));
 		if (err)
 			goto bail;
@@ -3742,7 +3742,7 @@ int fastrpc_internal_invoke2(struct fastrpc_file *fl,
 			err = -EBADE;
 			goto bail;
 		}
-		K_COPY_FROM_USER(err, is_compat, &p.user_concurrency,
+		K_COPY_FROM_USER(err, 0, &p.user_concurrency,
 				(void *)inv2->invparam, size);
 		if (err)
 			goto bail;
