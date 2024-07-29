@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -302,7 +302,7 @@ static struct clk_rcg2 disp_cc_mdss_vsync_clk_src = {
 };
 
 static const struct freq_tbl ftbl_disp_cc_sleep_clk_src[] = {
-	F(32000, P_SLEEP_CLK, 1, 0, 0),
+	F(32764, P_SLEEP_CLK, 1, 0, 0),
 	{ }
 };
 
@@ -322,7 +322,7 @@ static struct clk_rcg2 disp_cc_sleep_clk_src = {
 		.vdd_class = &vdd_cx,
 		.num_rate_max = VDD_NUM,
 		.rate_max = (unsigned long[VDD_NUM]) {
-			[VDD_MIN] = 32000},
+			[VDD_MIN] = 32764},
 	},
 };
 
