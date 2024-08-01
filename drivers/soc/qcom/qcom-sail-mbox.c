@@ -136,6 +136,21 @@ static int set_eventfd_for_signal(struct sail_irq_data *irq_data, const int irq_
 	return -ENOENT;
 }
 
+static int release_eventfd_for_signal(struct sail_irq_data *irq_data, const int irq_count,
+	const unsigned int signal)
+{
+	int i;
+
+	for (i = 0; i < irq_count; i++) {
+		if ((irq_data[i].signal_id == signal) && (irq_data[i].event_fd_sig)) {
+			eventfd_ctx_put(irq_data[i].event_fd_sig);
+			irq_data[i].event_fd_sig = NULL;
+			return 0;
+		}
+	}
+	return -ENOENT;
+}
+
 static struct eventfd_ctx *get_eventfd_from_irq(const unsigned int irq)
 {
 	int i;
@@ -261,6 +276,14 @@ static long sail_mb_ioctl_call(struct file *f, unsigned int cmd, unsigned long a
 			if (ret) {
 				dev_err(sailmb_dev->dev, "error %d getting irq for signal %d\n",
 					ret, data.sailmb_client.signal_num);
+				mutex_unlock(&sailmb_dev->dev_lock);
+				return ret;
+			}
+
+			ret = release_eventfd_for_signal(sailmb_dev->irq_data,
+				sailmb_dev->irq_count, data.sailmb_client.signal_num);
+			if (ret) {
+				dev_err(sailmb_dev->dev, "failed to reset eventfd %d\n", ret);
 				mutex_unlock(&sailmb_dev->dev_lock);
 				return ret;
 			}
