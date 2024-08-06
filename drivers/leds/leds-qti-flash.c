@@ -174,6 +174,7 @@ enum qti_flash_iio_props {
 	OCV,
 	IBAT,
 	F_TRIGGER,
+	F_ACTIVE,
 };
 
 static char *qti_flash_iio_prop_names[] = {
@@ -181,6 +182,7 @@ static char *qti_flash_iio_prop_names[] = {
 	[OCV] = "voltage_ocv",
 	[IBAT] = "current_now",
 	[F_TRIGGER] = "flash_trigger",
+	[F_ACTIVE] = "flash_active",
 };
 
 /**
@@ -393,6 +395,21 @@ static int qti_flash_iio_getprop(struct qti_flash_led *led,
 	return rc;
 }
 
+static int qti_flash_iio_setprop(struct qti_flash_led *led,
+				  enum qti_flash_iio_props chan, int data)
+{
+	int rc = 0;
+
+	rc = qti_flash_get_iio_chan(led, chan);
+	if (rc < 0)
+		return rc;
+
+	rc = iio_write_channel_raw(led->iio_channels[chan], data);
+	if (rc < 0)
+		pr_err("Error in writing IIO channel data rc = %d\n", rc);
+
+	return rc;
+}
 
 static int qti_flash_poll_vreg_ok(struct qti_flash_led *led)
 {
@@ -1383,6 +1400,50 @@ static int qti_flash_led_get_max_avail_current(
 	return 0;
 }
 
+
+static int qti_flash_led_regulator_control(struct led_classdev *led_cdev,
+					int options)
+{
+	struct flash_switch_data *snode;
+	int rc = 0, ret;
+	struct led_classdev_flash *fdev = NULL;
+	struct qti_flash_led *led;
+	struct flash_node_data *fnode;
+
+	fdev = container_of(led_cdev, struct led_classdev_flash, led_cdev);
+	fnode = container_of(fdev, struct flash_node_data, fdev);
+	led = fnode->led;
+
+	snode = container_of(led_cdev, struct flash_switch_data, cdev);
+
+	if (snode->led->data->pmic_type != PM2250)
+		return 0;
+
+	if (options & ENABLE_REGULATOR) {
+		ret = 1;
+		rc = qti_flash_iio_setprop(led, F_ACTIVE, ret);
+		if (rc < 0) {
+			pr_err("Failed to set FLASH_ACTIVE on charger rc=%d\n",
+							rc);
+			return rc;
+		}
+
+		pr_debug("FLASH_ACTIVE = 1\n");
+	} else if (options & DISABLE_REGULATOR) {
+		ret = 0;
+		rc = qti_flash_iio_setprop(led, F_ACTIVE, ret);
+		if (rc < 0) {
+			pr_err("Failed to set FLASH_ACTIVE on charger rc=%d\n",
+							rc);
+			return rc;
+		}
+
+		pr_debug("FLASH_ACTIVE = 0\n");
+	}
+
+	return 0;
+}
+
 int qti_flash_led_prepare(struct led_trigger *trig, int options,
 				int *max_current)
 {
@@ -1429,9 +1490,38 @@ int qti_flash_led_prepare(struct led_trigger *trig, int options,
 		}
 	}
 
-	return 0;
+	rc = qti_flash_led_regulator_control(led_cdev, options);
+	if (rc < 0)
+		pr_err("Failed to set flash control options\n");
+
+	return rc;
 }
 EXPORT_SYMBOL(qti_flash_led_prepare);
+
+static ssize_t qti_flash_led_prepare_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int rc, options;
+	u32 val;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+
+	rc = kstrtouint(buf, 0, &val);
+	if (rc < 0)
+		return rc;
+
+	if (val != 0 && val != 1)
+		return count;
+
+	options = val ? ENABLE_REGULATOR : DISABLE_REGULATOR;
+
+	rc = qti_flash_led_regulator_control(led_cdev, options);
+	if (rc < 0) {
+		pr_err("failed to query led regulator\n");
+		return rc;
+	}
+
+	return count;
+}
 
 static ssize_t qti_flash_led_max_current_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -1525,6 +1615,7 @@ static struct device_attribute qti_flash_led_attrs[] = {
 		qti_flash_on_time_store),
 	__ATTR(off_time, 0600, qti_flash_off_time_show,
 		qti_flash_off_time_store),
+	__ATTR(enable, 0664, NULL, qti_flash_led_prepare_store),
 };
 
 static int qti_flash_brightness_set_blocking(
