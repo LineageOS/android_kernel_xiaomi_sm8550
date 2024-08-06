@@ -93,6 +93,9 @@
 
 #define LED_MASK_ALL(led)		GENMASK(led->max_channels - 1, 0)
 
+#define FORCE_TORCH_MODE		0x68
+#define FORCE_TORCH			BIT(0)
+
 enum flash_led_type {
 	FLASH_LED_TYPE_UNKNOWN,
 	FLASH_LED_TYPE_FLASH,
@@ -464,6 +467,13 @@ static int qti_flash_led_enable(struct flash_node_data *fnode)
 			goto out;
 	}
 
+	if (fnode->type == FLASH_LED_TYPE_TORCH && led->subtype == 0x6) {
+		rc = qti_flash_led_masked_write(led, FORCE_TORCH_MODE,
+					FORCE_TORCH, FORCE_TORCH);
+		if (rc < 0)
+			goto out;
+	}
+
 	fnode->configured = true;
 
 	if ((fnode->strobe_sel == HW_STROBE) &&
@@ -502,6 +512,13 @@ static int qti_flash_led_disable(struct flash_node_data *fnode)
 		goto out;
 
 	fnode->configured = false;
+	if (fnode->type == FLASH_LED_TYPE_TORCH && led->subtype == 0x6) {
+		rc = qti_flash_led_masked_write(led, FORCE_TORCH_MODE,
+						FORCE_TORCH, 0);
+		if (rc < 0)
+			goto out;
+	}
+
 	fnode->current_ma = 0;
 	fnode->user_current_ma = 0;
 
