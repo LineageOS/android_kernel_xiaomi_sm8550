@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #define pr_fmt(fmt)	"qti-flash: %s: " fmt, __func__
 
@@ -1910,6 +1910,12 @@ static int qti_flash_led_probe(struct platform_device *pdev)
 	rc = qti_flash_led_register_interrupts(led);
 	if (rc < 0) {
 		pr_err("Failed to register LED interrupts rc=%d\n", rc);
+		return rc;
+	}
+
+	rc = qpnp_flash_register_led_prepare(&pdev->dev, qti_flash_led_prepare);
+	if (rc < 0) {
+		pr_err("Failed to register flash_led_prepare, rc=%d\n", rc);
 		return rc;
 	}
 

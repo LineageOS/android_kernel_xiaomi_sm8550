@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __LEDS_QTI_FLASH_H
@@ -22,22 +23,24 @@ struct flash_led_param {
 	u64 off_time_ms;
 };
 
-#if IS_ENABLED(CONFIG_LEDS_QTI_FLASH)
-int qti_flash_led_prepare(struct led_trigger *trig,
-			int options, int *max_current);
+int qpnp_flash_register_led_prepare(struct device *dev, void *data);
+
+#if (IS_ENABLED(CONFIG_LEDS_QTI_FLASH) || IS_ENABLED(CONFIG_LEDS_QPNP_FLASH_V2))
+int qpnp_flash_led_prepare(struct led_trigger *trig, int options,
+					int *max_current);
 int qti_flash_led_set_param(struct led_trigger *trig,
 			struct flash_led_param param);
 #else
-static inline int qti_flash_led_prepare(struct led_trigger *trig,
-					int options, int *max_current)
+static inline int qpnp_flash_led_prepare(struct led_trigger *trig, int options,
+					int *max_current)
 {
-	return -EINVAL;
+	return -ENODEV;
 }
 
 static inline int qti_flash_led_set_param(struct led_trigger *trig,
-			struct flash_led_param param);
+			struct flash_led_param param)
 {
-	return -EINVAL;
+	return -ENODEV;
 }
 #endif
 #endif
