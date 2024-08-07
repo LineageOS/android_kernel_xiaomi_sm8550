@@ -45,6 +45,7 @@ mem_buf.ko
 msm_dma_iommu_mapping.ko
 pinctrl-khaje.ko
 pinctrl-bengal.ko
+pinctrl-scuba.ko
 qnoc-bengal.ko
 ns.ko
 nvmem_qfprom.ko
