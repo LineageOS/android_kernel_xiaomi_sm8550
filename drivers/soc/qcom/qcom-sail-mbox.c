@@ -649,11 +649,11 @@ static int sailmb_probe(struct platform_device *pdev)
 		goto failed_device_create;
 	}
 
-	ret = populate_irq_from_dt(pdev, sailmb_dev);
+	ret = populate_mbox_from_dt(pdev, sailmb_dev);
 	if (ret)
 		goto out;
 
-	ret = populate_mbox_from_dt(pdev, sailmb_dev);
+	ret = populate_irq_from_dt(pdev, sailmb_dev);
 	if (ret)
 		goto out;
 
