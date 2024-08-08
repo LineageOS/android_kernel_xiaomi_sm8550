@@ -22,6 +22,7 @@
 #include <linux/regulator/driver.h>
 #include <linux/regulator/machine.h>
 #include <linux/usb/phy.h>
+#include <linux/usb/dwc3-msm.h>
 #include <linux/reset.h>
 
 #define QUSB2PHY_PLL_PWR_CTL		0x18
@@ -464,6 +465,7 @@ static int qusb_phy_init(struct usb_phy *phy)
 	u8 reg;
 	bool pll_lock_fail = false;
 
+	qusb_phy_enable_clocks(qphy, true);
 	if (qphy->eud_enable_reg && readl_relaxed(qphy->eud_enable_reg)) {
 		dev_err(qphy->phy.dev, "eud is enabled\n");
 		return 0;
@@ -618,12 +620,11 @@ static void qusb_phy_shutdown(struct usb_phy *phy)
 {
 	struct qusb_phy *qphy = container_of(phy, struct qusb_phy, phy);
 
+	qusb_phy_enable_clocks(qphy, true);
 	if (qphy->eud_enable_reg && readl_relaxed(qphy->eud_enable_reg)) {
 		dev_err(qphy->phy.dev, "eud is enabled\n");
 		return;
 	}
-
-	qusb_phy_enable_clocks(qphy, true);
 
 	/* Disable the PHY */
 	if (qphy->major_rev < 2)
@@ -659,7 +660,15 @@ static int qusb_phy_set_suspend(struct usb_phy *phy, int suspend)
 
 	if (suspend) {
 		/* Bus suspend case */
-		if (qphy->cable_connected) {
+		/*
+		 * The HUB class drivers calls usb_phy_notify_disconnect() upon a device
+		 * disconnect. Consider a scenario where a USB device is disconnected without
+		 * detaching the OTG cable. qphy->cable_connected is marked false due to above
+		 * mentioned call path. Now, while entering low power mode (host bus suspend),
+		 * we come here and turn off regulators thinking no cable is connected. Prevent
+		 * this by not turning off regulators while in host mode.
+		 */
+		if (qphy->cable_connected || (qphy->phy.flags & PHY_HOST_MODE)) {
 			/* Clear all interrupts */
 			writel_relaxed(0x00,
 				qphy->base + QUSB2PHY_PORT_INTR_CTRL);
