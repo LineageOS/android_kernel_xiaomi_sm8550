@@ -2,7 +2,7 @@
 /*
  * Copyright(C) 2016 Linaro Limited. All rights reserved.
  * Author: Mathieu Poirier <mathieu.poirier@linaro.org>
- * Copyright (c) 2022, 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/atomic.h>
@@ -210,7 +210,7 @@ static int tmc_pages_alloc(struct tmc_pages *tmc_pages,
 	tmc_pages->daddrs = kcalloc(nr_pages, sizeof(*tmc_pages->daddrs),
 					 GFP_KERNEL);
 	if (!tmc_pages->daddrs) {
-		tmc_pages->daddrs = vmalloc(sizeof(*tmc_pages->daddrs) * nr_pages);
+		tmc_pages->daddrs = vzalloc(sizeof(*tmc_pages->daddrs) * nr_pages);
 		if (!tmc_pages->daddrs)
 			return -ENOMEM;
 	}
@@ -218,7 +218,7 @@ static int tmc_pages_alloc(struct tmc_pages *tmc_pages,
 	tmc_pages->pages = kcalloc(nr_pages, sizeof(*tmc_pages->pages),
 					 GFP_KERNEL);
 	if (!tmc_pages->pages) {
-		tmc_pages->pages = vmalloc(sizeof(*tmc_pages->pages) * nr_pages);
+		tmc_pages->pages = vzalloc(sizeof(*tmc_pages->pages) * nr_pages);
 		if (!tmc_pages->pages) {
 			if (is_vmalloc_addr(tmc_pages->daddrs))
 				vfree(tmc_pages->daddrs);
