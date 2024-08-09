@@ -392,9 +392,9 @@ static struct clk_debug_mux mc_cc_debug_mux = {
 static struct mux_regmap_names mux_list[] = {
 	{ .mux = &apcs_debug_mux, .regmap_name = "qcom,cpucc" },
 	{ .mux = &disp_cc_debug_mux, .regmap_name = "qcom,dispcc" },
-	{ .mux = &gcc_debug_mux, .regmap_name = "qcom,gcc" },
 	{ .mux = &gpu_cc_debug_mux, .regmap_name = "qcom,gpucc" },
 	{ .mux = &mc_cc_debug_mux, .regmap_name = "qcom,mccc" },
+	{ .mux = &gcc_debug_mux, .regmap_name = "qcom,gcc" },
 };
 
 static struct clk_dummy measure_only_cnoc_clk = {
@@ -572,6 +572,8 @@ static int clk_debug_scuba_probe(struct platform_device *pdev)
 	struct clk *clk;
 	int ret = 0, i;
 
+	BUILD_BUG_ON(ARRAY_SIZE(apcs_debug_mux_parent_names) !=
+		ARRAY_SIZE(apcs_debug_mux_sels));
 	BUILD_BUG_ON(ARRAY_SIZE(disp_cc_debug_mux_parent_names) !=
 		ARRAY_SIZE(disp_cc_debug_mux_sels));
 	BUILD_BUG_ON(ARRAY_SIZE(gcc_debug_mux_parent_names) !=
@@ -599,16 +601,6 @@ static int clk_debug_scuba_probe(struct platform_device *pdev)
 		}
 	}
 
-	for (i = 0; i < ARRAY_SIZE(mux_list); i++) {
-		ret = devm_clk_register_debug_mux(&pdev->dev, mux_list[i].mux);
-		if (ret) {
-			dev_err(&pdev->dev, "Unable to register mux clk %s, err:(%d)\n",
-				clk_hw_get_name(&mux_list[i].mux->hw),
-				ret);
-			return ret;
-		}
-	}
-
 	for (i = 0; i < ARRAY_SIZE(debugcc_scuba_hws); i++) {
 		clk = devm_clk_register(&pdev->dev, debugcc_scuba_hws[i]);
 		if (IS_ERR(clk)) {
@@ -616,6 +608,16 @@ static int clk_debug_scuba_probe(struct platform_device *pdev)
 				clk_hw_get_name(debugcc_scuba_hws[i]),
 				PTR_ERR(clk));
 			return PTR_ERR(clk);
+		}
+	}
+
+	for (i = 0; i < ARRAY_SIZE(mux_list); i++) {
+		ret = devm_clk_register_debug_mux(&pdev->dev, mux_list[i].mux);
+		if (ret) {
+			dev_err(&pdev->dev, "Unable to register mux clk %s, err:(%d)\n",
+				clk_hw_get_name(&mux_list[i].mux->hw),
+				ret);
+			return ret;
 		}
 	}
 
