@@ -3797,6 +3797,10 @@ static int nl80211_send_chandef(struct sk_buff *msg,
 	if (chandef->center_freq2 &&
 	    nla_put_u32(msg, NL80211_ATTR_CENTER_FREQ2, chandef->center_freq2))
 		return -ENOBUFS;
+#ifdef CFG80211_PROP_MULTI_LINK_SUPPORT
+	if (nla_put_u32(msg, NL80211_ATTR_EHT_PUNCTURE_BITMAP, chandef->puncture_bitmap))
+		return -ENOBUFS;
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 	return 0;
 }
 
