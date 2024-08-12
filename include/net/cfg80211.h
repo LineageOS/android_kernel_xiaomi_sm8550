@@ -368,6 +368,7 @@ struct ieee80211_sta_he_cap {
 	u8 ppe_thres[IEEE80211_HE_PPE_THRES_MAX_LEN];
 };
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 /**
  * struct ieee80211_eht_mcs_nss_supp - EHT max supported NSS per MCS
  *
@@ -447,6 +448,45 @@ struct ieee80211_sband_iftype_data {
 	ANDROID_VENDOR_DATA(3);
 	ANDROID_VENDOR_DATA(4);
 };
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+/**
+ * struct ieee80211_sta_eht_cap - STA's EHT capabilities
+ *
+ * This structure describes most essential parameters needed
+ * to describe 802.11be EHT capabilities for a STA.
+ *
+ * @has_eht: true if EHT data is valid.
+ * @eht_cap_elem: Fixed portion of the EHTcapabilities element.
+ * @eht_mcs_nss_supp: The supported NSS/MCS combinations.
+ */
+struct ieee80211_sta_eht_cap {
+	bool has_eht;
+	struct ieee80211_eht_cap_elem eht_cap_elem;
+	struct ieee80211_eht_mcs_nss_supp eht_mcs_nss_supp;
+};
+
+/**
+ * struct ieee80211_sband_iftype_data - sband data per interface type
+ *
+ * This structure encapsulates sband data that is relevant for the
+ * interface types defined in @types_mask.  Each type in the
+ * @types_mask must be unique across all instances of iftype_data.
+ *
+ * @types_mask: interface types mask
+ * @he_cap: holds the HE capabilities
+ * @eht_cap: holds the EHT capabilities.
+ */
+struct ieee80211_sband_iftype_data {
+	u16 types_mask;
+	struct ieee80211_sta_he_cap he_cap;
+	struct ieee80211_he_6ghz_capa he_6ghz_capa;
+	struct ieee80211_sta_eht_cap eht_cap;
+	struct {
+		const u8 *data;
+		unsigned int len;
+	} vendor_elems;
+};
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 /**
  * enum ieee80211_edmg_bw_config - allowed channel bandwidth configurations
@@ -637,6 +677,7 @@ ieee80211_get_he_6ghz_capa(const struct ieee80211_supported_band *sband,
 	return data->he_6ghz_capa.capa;
 }
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 /**
  * ieee80211_get_eht_iftype_cap - return ETH capabilities for an sband's iftype
  * @sband: the sband to search for the iftype on
@@ -656,6 +697,39 @@ ieee80211_get_eht_iftype_cap(const struct ieee80211_supported_band *sband,
 
 	return NULL;
 }
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+/**
+ * ieee80211_get_eht_iftype_cap - return EHT capabilities for an sband's iftype
+ * @sband: the sband to search for the iftype on
+ * @iftype: enum nl80211_iftype
+ *
+ * Return: pointer to the struct ieee80211_sta_eht_cap, or NULL is none found
+ */
+static inline const struct ieee80211_sta_eht_cap *
+ieee80211_get_eht_iftype_cap(const struct ieee80211_supported_band *sband,
+		u8 iftype)
+{
+	const struct ieee80211_sband_iftype_data *data =
+		ieee80211_get_sband_iftype_data(sband, iftype);
+
+	if (data && data->eht_cap.has_eht)
+		return &data->eht_cap;
+
+	return NULL;
+}
+
+/**
+ * ieee80211_get_eht_sta_cap - return EHT capabilities for an sband's   STA
+ * @sband: the sband to search for the STA on
+ *
+ * Return: pointer to the struct ieee80211_sta_eht_cap, or NULL is none found
+ */
+static inline const struct ieee80211_sta_eht_cap *
+ieee80211_get_eht_sta_cap(const struct ieee80211_supported_band *sband)
+{
+	return ieee80211_get_eht_iftype_cap(sband, NL80211_IFTYPE_STATION);
+}
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 /**
  * wiphy_read_of_freq_limits - read frequency limits from device tree
@@ -1613,6 +1687,7 @@ struct link_station_del_parameters {
 	u32 link_id;
 };
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 /**
  * struct station_parameters - station parameters
  *
@@ -1685,6 +1760,91 @@ struct station_parameters {
 
 	ANDROID_KABI_RESERVE(1);
 };
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+/**
+ * struct station_parameters - station parameters
+ *
+ * Used to change and create a new station.
+ *
+ * @vlan: vlan interface station should belong to
+ * @supported_rates: supported rates in IEEE 802.11 format
+ *	(or NULL for no change)
+ * @supported_rates_len: number of supported rates
+ * @sta_flags_mask: station flags that changed
+ *	(bitmask of BIT(%NL80211_STA_FLAG_...))
+ * @sta_flags_set: station flags values
+ *	(bitmask of BIT(%NL80211_STA_FLAG_...))
+ * @listen_interval: listen interval or -1 for no change
+ * @aid: AID or zero for no change
+ * @vlan_id: VLAN ID for station (if nonzero)
+ * @peer_aid: mesh peer AID or zero for no change
+ * @plink_action: plink action to take
+ * @plink_state: set the peer link state for a station
+ * @ht_capa: HT capabilities of station
+ * @vht_capa: VHT capabilities of station
+ * @uapsd_queues: bitmap of queues configured for uapsd. same format
+ *	as the AC bitmap in the QoS info field
+ * @max_sp: max Service Period. same format as the MAX_SP in the
+ *	QoS info field (but already shifted down)
+ * @sta_modify_mask: bitmap indicating which parameters changed
+ *	(for those that don't have a natural "no change" value),
+ *	see &enum station_parameters_apply_mask
+ * @local_pm: local link-specific mesh power save mode (no change when set
+ *	to unknown)
+ * @capability: station capability
+ * @ext_capab: extended capabilities of the station
+ * @ext_capab_len: number of extended capabilities
+ * @supported_channels: supported channels in IEEE 802.11 format
+ * @supported_channels_len: number of supported channels
+ * @supported_oper_classes: supported oper classes in IEEE 802.11 format
+ * @supported_oper_classes_len: number of supported operating classes
+ * @opmode_notif: operating mode field from Operating Mode Notification
+ * @opmode_notif_used: information if operating mode field is used
+ * @support_p2p_ps: information if station supports P2P PS mechanism
+ * @he_capa: HE capabilities of station
+ * @he_capa_len: the length of the HE capabilities
+ * @airtime_weight: airtime scheduler weight for this station
+ * @txpwr: transmit power for an associated station
+ * @he_6ghz_capa: HE 6 GHz Band capabilities of station
+ * @eht_capa: EHT capabilities of station
+ * @eht_capa_len: the length of the EHT capabilities
+ */
+struct station_parameters {
+	const u8 *supported_rates;
+	struct net_device *vlan;
+	u32 sta_flags_mask, sta_flags_set;
+	u32 sta_modify_mask;
+	int listen_interval;
+	u16 aid;
+	u16 vlan_id;
+	u16 peer_aid;
+	u8 supported_rates_len;
+	u8 plink_action;
+	u8 plink_state;
+	const struct ieee80211_ht_cap *ht_capa;
+	const struct ieee80211_vht_cap *vht_capa;
+	u8 uapsd_queues;
+	u8 max_sp;
+	enum nl80211_mesh_power_mode local_pm;
+	u16 capability;
+	const u8 *ext_capab;
+	u8 ext_capab_len;
+	const u8 *supported_channels;
+	u8 supported_channels_len;
+	const u8 *supported_oper_classes;
+	u8 supported_oper_classes_len;
+	u8 opmode_notif;
+	bool opmode_notif_used;
+	int support_p2p_ps;
+	const struct ieee80211_he_cap_elem *he_capa;
+	u8 he_capa_len;
+	u16 airtime_weight;
+	struct sta_txpwr txpwr;
+	const struct ieee80211_he_6ghz_capa *he_6ghz_capa;
+	const struct ieee80211_eht_cap_elem *eht_capa;
+	u8 eht_capa_len;
+};
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 /**
  * struct station_del_parameters - station deletion parameters

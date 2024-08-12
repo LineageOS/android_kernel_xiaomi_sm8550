@@ -3385,8 +3385,14 @@ enum nl80211_attrs {
  * present in %NL80211_CMD_GET_WIPHY response.
  */
 #define NL80211_MAX_NR_AKM_SUITES		2
+
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 #define NL80211_EHT_MIN_CAPABILITY_LEN          13
 #define NL80211_EHT_MAX_CAPABILITY_LEN          51
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+#define NL80211_EHT_MIN_CAPABILITY_LEN          16
+#define NL80211_EHT_MAX_CAPABILITY_LEN          54
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 #define NL80211_MIN_REMAIN_ON_CHANNEL_TIME	10
 
@@ -4186,6 +4192,7 @@ enum nl80211_wmm_rule {
  *	as the primary or any of the secondary channels isn't possible
  * @NL80211_FREQUENCY_ATTR_NO_EHT: EHT operation is not allowed on this channel
  *	in current regulatory domain.
+ * @NL80211_FREQUENCY_ATTR_CHANNEL: HW value for frequency
  * @NL80211_FREQUENCY_ATTR_MAX: highest frequency attribute number
  *	currently defined
  * @__NL80211_FREQUENCY_ATTR_AFTER_LAST: internal use
@@ -4224,6 +4231,7 @@ enum nl80211_frequency_attr {
 	NL80211_FREQUENCY_ATTR_16MHZ,
 	NL80211_FREQUENCY_ATTR_NO_320MHZ,
 	NL80211_FREQUENCY_ATTR_NO_EHT,
+	NL80211_FREQUENCY_ATTR_CHANNEL,
 
 	/* keep last */
 	__NL80211_FREQUENCY_ATTR_AFTER_LAST,
