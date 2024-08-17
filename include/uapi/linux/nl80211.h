@@ -2780,6 +2780,11 @@ enum nl80211_commands {
  *	indicates that the sub-channel is punctured. Higher 16 bits are
  *	reserved.
  *
+ * @NL80211_ATTR_MLD_MAC: MLD MAC address.
+ * @NL80211_ATTR_MLD_REFERENCE: MLD Reference.
+ * @NL80211_ATTR_MLD_LINK_IDS: nested attribute to hold MLD link-ids.
+ * @NL80211_ATTR_MLD_LINK_MACS: nested attribute to hold MLD mac addrs.
+ *
  * @NUM_NL80211_ATTR: total number of nl80211_attrs available
  * @NL80211_ATTR_MAX: highest attribute number currently defined
  * @__NL80211_ATTR_AFTER_LAST: internal use
@@ -3324,6 +3329,12 @@ enum nl80211_attrs {
 	NL80211_ATTR_RESERVED_DO_NOT_USE_23 = 334,
 	NL80211_ATTR_RESERVED_DO_NOT_USE_24 = 335,
 	NL80211_ATTR_RESERVED_DO_NOT_USE_25 = 336,
+
+	NL80211_ATTR_EHT_PUNCTURE_BITMAP = 350,
+	NL80211_ATTR_MLD_MAC,
+	NL80211_ATTR_MLD_REFERENCE,
+	NL80211_ATTR_MLD_LINK_IDS,
+	NL80211_ATTR_MLD_LINK_MACS,
 
 	/* add attributes here, update the policy in nl80211.c */
 
@@ -6387,6 +6398,11 @@ enum nl80211_feature_flags {
  *
  * @NL80211_EXT_FEATURE_SECURE_NAN: Device supports NAN Pairing which enables
  *	authentication, data encryption and message integrity.
+ * @NL80211_EXT_FEATURE_MLO: Driver/Device support Multi-link Operation(MLO)
+ *      feature.
+ *
+ * @NL80211_EXT_FEATURE_AUTH_TX_RANDOM_TA: Device supports randomized TA
+ *	for authentication frames in @NL80211_CMD_FRAME.
  *
  * @NUM_NL80211_EXT_FEATURES: number of extended features.
  * @MAX_NL80211_EXT_FEATURES: highest extended feature index.
@@ -6465,7 +6481,10 @@ enum nl80211_ext_feature_index {
 	NL80211_EXT_FEATURE_RESERVED_DO_NOT_USE_8 = 69,
 	NL80211_EXT_FEATURE_RESERVED_DO_NOT_USE_9 = 70,
 	NL80211_EXT_FEATURE_RESERVED_DO_NOT_USE_10 = 71,
-
+#ifdef CFG80211_PROP_MULTI_LINK_SUPPORT
+	NL80211_EXT_FEATURE_MLO,
+	NL80211_EXT_FEATURE_AUTH_TX_RANDOM_TA,
+#endif
 	/* add new features before the definition below */
 	NUM_NL80211_EXT_FEATURES,
 	MAX_NL80211_EXT_FEATURES = NUM_NL80211_EXT_FEATURES - 1
