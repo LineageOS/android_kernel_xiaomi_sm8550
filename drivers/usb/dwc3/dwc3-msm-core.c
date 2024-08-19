@@ -6516,19 +6516,14 @@ static int dwc3_msm_host_notifier(struct notifier_block *nb,
 	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
 	struct usb_device *udev = ptr;
 
-	if (event == USB_BUS_ADD) {
+	if (event == USB_BUS_ADD && mdwc->enable_host_slow_suspend) {
 		struct usb_bus *ubus = ptr;
 		struct usb_hcd *hcd = bus_to_hcd(ubus);
 		struct xhci_hcd *xhci = hcd_to_xhci(hcd);
 
 		if (usb_hcd_is_primary_hcd(hcd)) {
-			if (mdwc->enable_host_slow_suspend) {
-				dev_dbg(ubus->controller, "enable slow suspend\n");
-				xhci->quirks |= XHCI_SLOW_SUSPEND;
-			}
-
-			if (mdwc->force_suspend)
-				xhci->quirks |= XHCI_RESET_ON_RESUME;
+			dev_dbg(ubus->controller, "enable slow suspend\n");
+			xhci->quirks |= XHCI_SLOW_SUSPEND;
 		}
 	}
 
