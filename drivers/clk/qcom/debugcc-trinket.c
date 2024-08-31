@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #define pr_fmt(fmt) "clk: %s: " fmt, __func__
@@ -546,7 +546,7 @@ static const char *const mc_cc_debug_mux_parent_names[] = {
 };
 
 static struct clk_debug_mux mc_cc_debug_mux = {
-	.period_offset = 0x50,
+	.period_offset = 0x20,
 	.hw.init = &(struct clk_init_data){
 		.name = "mc_cc_debug_mux",
 		.ops = &clk_debug_mux_ops,

@@ -229,6 +229,7 @@ void slatecom_intf_notify_glink_channel_state(bool state)
 
 	pr_debug("%s: slate_ctrl channel state: %d\n", __func__, state);
 	dev->slatecom_rpmsg = state;
+	wake_up(&dev->link_state_wait);
 }
 
 void slatecom_rx_msg(void *data, int len)
@@ -1277,10 +1278,10 @@ static int ssr_slate_cb(struct notifier_block *this,
 		twm_exit = false;
 		slatee.e_type = SLATE_AFTER_POWER_UP;
 		slatecom_set_spi_state(SLATECOM_SPI_FREE);
-		send_uevent(&slatee);
 		if (dev->slatecom_current_state == SLATECOM_STATE_INIT ||
 			dev->slatecom_current_state == SLATECOM_STATE_SLATE_SSR)
 			queue_work(dev->slatecom_wq, &dev->slatecom_up_work);
+		send_uevent(&slatee);
 		if (dev->rf_clk_2)
 			rf_clk_disable(dev->rf_clk_2);
 		break;

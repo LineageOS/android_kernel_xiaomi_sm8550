@@ -27,6 +27,7 @@
 #include <linux/mailbox_controller.h>
 #include <linux/reset.h>
 #include <linux/interconnect.h>
+#include <linux/remoteproc.h>
 #include "npu_mgr.h"
 
 /* -------------------------------------------------------------------------
@@ -241,13 +242,6 @@ struct mbox_bridge_data {
 	void *priv_data;
 };
 
-struct npu_fw_io_data {
-	phys_addr_t mem_phys;
-	phys_addr_t mem_reloc;
-	void *mem_region;
-	size_t mem_size;
-};
-
 struct npu_device {
 	struct mutex dev_lock;
 	spinlock_t ipc_lock;
@@ -265,7 +259,6 @@ struct npu_device {
 	struct npu_io_data tcsr_io;
 	struct npu_io_data apss_shared_io;
 	struct npu_io_data qfprom_io;
-	struct npu_fw_io_data fw_io;
 
 	uint32_t core_clk_num;
 	struct npu_clk core_clks[NUM_MAX_CLK_NUM];
@@ -278,6 +271,7 @@ struct npu_device {
 
 	struct device *cb_device;
 
+	phandle rproc_phandle;
 	struct npu_host_ctx host_ctx;
 	struct npu_smmu_ctx smmu_ctx;
 	struct npu_debugfs_ctx debugfs_ctx;

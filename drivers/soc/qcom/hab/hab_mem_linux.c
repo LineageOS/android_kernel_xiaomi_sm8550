@@ -987,10 +987,21 @@ int habmem_imp_hyp_map(void *imp_ctx, struct hab_import *param,
 
 int habmm_imp_hyp_unmap(void *imp_ctx, struct export_desc *exp, int kernel)
 {
+	int ret = 0;
+	struct dma_buf *buf;
+
 	/* dma_buf is the only supported format in khab */
-	if (kernel)
-		dma_buf_put((struct dma_buf *)exp->kva);
-	return 0;
+	if (kernel) {
+		buf = (struct dma_buf *)exp->kva;
+		if (file_count(buf->file) > 1) {
+			ret = -EBUSY;
+			pr_err("exp id %d still in use on %s, refcnt %d\n",
+				exp->export_id, exp->pchan->name, file_count(buf->file));
+		} else
+			dma_buf_put((struct dma_buf *)exp->kva);
+	}
+
+	return ret;
 }
 
 int habmem_imp_hyp_mmap(struct file *filp, struct vm_area_struct *vma)

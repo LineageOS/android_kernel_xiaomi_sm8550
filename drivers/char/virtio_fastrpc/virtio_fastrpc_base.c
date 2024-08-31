@@ -386,13 +386,12 @@ static int vfastrpc_control_ioctl(struct fastrpc_ioctl_control *cp,
 	return err;
 }
 
-static int vfastrpc_get_info_ioctl(void *param, struct vfastrpc_file *vfl)
+static int vfastrpc_get_info_ioctl(void *param, struct vfastrpc_file *vfl, bool is_compat)
 {
 	int err = 0;
 	uint32_t info;
-	struct fastrpc_file *fl = to_fastrpc_file(vfl);
 
-	K_COPY_FROM_USER(err, fl->is_compat, &info, param, sizeof(info));
+	K_COPY_FROM_USER(err, is_compat, &info, param, sizeof(info));
 	if (err)
 		return err;
 
@@ -400,7 +399,7 @@ static int vfastrpc_get_info_ioctl(void *param, struct vfastrpc_file *vfl)
 	if (err)
 		return err;
 
-	K_COPY_TO_USER(err, fl->is_compat, param, &info, sizeof(info));
+	K_COPY_TO_USER(err, is_compat, param, &info, sizeof(info));
 	return err;
 }
 
@@ -408,16 +407,15 @@ int fastrpc_get_info(struct fastrpc_file *fl, uint32_t *info)
 {
 	struct vfastrpc_file *vfl = to_vfastrpc_file(fl);
 
-	return vfastrpc_get_info_ioctl(info, vfl);
+	return vfastrpc_get_info_ioctl(info, vfl, true);
 }
 
 static int vfastrpc_init_ioctl(struct fastrpc_ioctl_init_attrs *init,
 		void *param, struct vfastrpc_file *vfl)
 {
 	int err = 0;
-	struct fastrpc_file *fl = to_fastrpc_file(vfl);
 
-	K_COPY_FROM_USER(err, fl->is_compat, init, param, sizeof(*init));
+	K_COPY_FROM_USER(err, 0, init, param, sizeof(*init));
 	if (err)
 		return err;
 
@@ -459,15 +457,15 @@ int fastrpc_internal_invoke(struct fastrpc_file *fl, uint32_t mode,
 {
 	struct vfastrpc_file *vfl = to_vfastrpc_file(fl);
 
-	return vfastrpc_internal_invoke(vfl, mode, inv);
+	return vfastrpc_internal_invoke(vfl, mode, inv, kernel);
 }
 
 int fastrpc_internal_invoke2(struct fastrpc_file *fl,
-				struct fastrpc_ioctl_invoke2 *inv2)
+				struct fastrpc_ioctl_invoke2 *inv2, bool is_compat)
 {
 	struct vfastrpc_file *vfl = to_vfastrpc_file(fl);
 
-	return vfastrpc_internal_invoke2(vfl, inv2);
+	return vfastrpc_internal_invoke2(vfl, inv2, is_compat);
 }
 
 int fastrpc_internal_munmap(struct fastrpc_file *fl,
@@ -549,6 +547,11 @@ int fastrpc_dspsignal_destroy(struct fastrpc_file *fl,
 	return -ENOTTY;
 }
 
+int fastrpc_check_pd_status(struct fastrpc_file *fl, char *sloc_name)
+{
+	return -ENOTTY;
+}
+
 int fastrpc_internal_mem_unmap(struct fastrpc_file *fl,
 				struct fastrpc_ioctl_mem_unmap *ud)
 {
@@ -618,7 +621,7 @@ static long vfastrpc_ioctl(struct file *file, unsigned int ioctl_num,
 		if (err)
 			goto bail;
 
-		err = vfastrpc_internal_invoke(vfl, fl->mode, &p.inv);
+		err = vfastrpc_internal_invoke(vfl, fl->mode, &p.inv, USER_MSG);
 		break;
 	case FASTRPC_IOCTL_INVOKE2:
 		K_COPY_FROM_USER(err, 0, &p.inv2, param,
@@ -627,7 +630,7 @@ static long vfastrpc_ioctl(struct file *file, unsigned int ioctl_num,
 			err = -EFAULT;
 			goto bail;
 		}
-		err = vfastrpc_internal_invoke2(vfl, &p.inv2);
+		err = vfastrpc_internal_invoke2(vfl, &p.inv2, false);
 		break;
 	case FASTRPC_IOCTL_MEM_MAP:
 	case FASTRPC_IOCTL_MEM_UNMAP:
@@ -645,7 +648,7 @@ static long vfastrpc_ioctl(struct file *file, unsigned int ioctl_num,
 		err = vfastrpc_control_ioctl(&p.cp, param, vfl);
 		break;
 	case FASTRPC_IOCTL_GETINFO:
-		err = vfastrpc_get_info_ioctl(param, vfl);
+		err = vfastrpc_get_info_ioctl(param, vfl, false);
 		break;
 	case FASTRPC_IOCTL_INIT:
 		p.init.attrs = 0;

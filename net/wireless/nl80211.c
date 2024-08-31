@@ -3993,6 +3993,7 @@ static int nl80211_dump_interface(struct sk_buff *skb, struct netlink_callback *
 			if_idx++;
 		}
 
+		if_start = 0;
 		wp_idx++;
 	}
  out:
@@ -4168,6 +4169,8 @@ static int nl80211_set_interface(struct sk_buff *skb, struct genl_info *info)
 		struct wireless_dev *wdev = dev->ieee80211_ptr;
 
 		if (ntype != NL80211_IFTYPE_MESH_POINT)
+			return -EINVAL;
+		if (otype != NL80211_IFTYPE_MESH_POINT)
 			return -EINVAL;
 		if (netif_running(dev))
 			return -EBUSY;
@@ -5412,8 +5415,11 @@ nl80211_parse_mbssid_elems(struct wiphy *wiphy, struct nlattr *attrs)
 	if (!wiphy->mbssid_max_interfaces)
 		return ERR_PTR(-EINVAL);
 
-	nla_for_each_nested(nl_elems, attrs, rem_elems)
+	nla_for_each_nested(nl_elems, attrs, rem_elems) {
+		if (num_elems >= 255)
+			return ERR_PTR(-EINVAL);
 		num_elems++;
+	}
 
 	elems = kzalloc(struct_size(elems, elem, num_elems), GFP_KERNEL);
 	if (!elems)
@@ -10659,9 +10665,13 @@ static int nl80211_crypto_settings(struct cfg80211_registered_device *rdev,
 		proto = nla_get_u16(
 			info->attrs[NL80211_ATTR_CONTROL_PORT_ETHERTYPE]);
 		settings->control_port_ethertype = cpu_to_be16(proto);
+#ifndef ETH_P_WAI
+#define ETH_P_WAI 0x88B4
+#endif
 		if (!(rdev->wiphy.flags & WIPHY_FLAG_CONTROL_PORT_PROTOCOL) &&
-		    proto != ETH_P_PAE)
+		    ((proto != ETH_P_PAE) && (proto != ETH_P_WAI)))
 			return -EINVAL;
+#undef ETH_P_WAI
 		if (info->attrs[NL80211_ATTR_CONTROL_PORT_NO_ENCRYPT])
 			settings->control_port_no_encrypt = true;
 	} else

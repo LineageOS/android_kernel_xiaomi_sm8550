@@ -1107,7 +1107,7 @@ static void anx7625_hpd_polling(struct anx7625_data *ctx)
 				 ctx, val,
 				 ((val & HPD_STATUS) || (val < 0)),
 				 5000,
-				 5000 * 10);
+				 5000 * 30);
 	if (ret) {
 		DRM_DEV_ERROR(dev, "no hpd.\n");
 		return;

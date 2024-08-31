@@ -244,16 +244,12 @@ enum TC956X_PORT_LINK_CHANGE_STATE {
 /* 0x20004040 to 0x2000405C is for Port0, 0x20004060 to 0x2000407C is for Port1 */
 #define SRAM_RX_PCIE_ADDR_LOC	0x44040
 
-#ifdef CONFIG_DEBUG_FS
-
 #ifdef TC956X
 int tc956xmac_init(void);
 #endif
 
 #ifdef TC956X
 void tc956xmac_exit(void);
-#endif
-
 #endif
 
 #ifdef TC956X_SRIOV_PF

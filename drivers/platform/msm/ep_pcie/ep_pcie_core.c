@@ -1000,6 +1000,10 @@ static void ep_pcie_core_init(struct ep_pcie_dev_t *dev, bool configured)
 	ep_pcie_write_mask(dev->parf + PCIE20_PARF_AXI_MSTR_WR_ADDR_HALT,
 			0, BIT(31));
 
+	/* Dont ignore BME & block outbound traffic when BME is de-asserted */
+	ep_pcie_write_mask(dev->parf + PCIE20_PARF_LINK_DOWN_ECAM_BLOCK,
+			BIT(6), 0);
+
 	/* Q2A flush disable */
 	writel_relaxed(0, dev->parf + PCIE20_PARF_Q2A_FLUSH);
 

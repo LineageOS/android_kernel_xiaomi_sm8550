@@ -99,7 +99,7 @@ enum fw_state {
 struct npu_host_ctx {
 	struct mutex lock;
 	struct npu_device *npu_dev;
-	void *subsystem_handle;
+	struct rproc *npu_rproc_handle;
 	enum fw_state fw_state;
 	int32_t fw_ref_cnt;
 	int32_t npu_init_cnt;

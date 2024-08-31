@@ -146,6 +146,7 @@ static void *slate_com_drv;
 static uint32_t g_slav_status_reg;
 static uint32_t g_slave_status_auto_clear_reg;
 static bool is_hibernate;
+static bool s2a_status;
 
 /* SLATECOM client callbacks set-up */
 static void send_input_events(struct work_struct *work);
@@ -756,6 +757,12 @@ static int is_slate_resume(void *handle, uint32_t *slav_status_reg,
 	return ((*slav_status_reg) & BIT(31));
 }
 
+void update_s2a_status(bool s2a_status_value)
+{
+	s2a_status = s2a_status_value;
+}
+EXPORT_SYMBOL_GPL(update_s2a_status);
+
 static int slatecom_resume_l(void *handle)
 {
 	struct slate_context *cntx;
@@ -794,7 +801,7 @@ static int slatecom_resume_l(void *handle)
 		goto unlock;
 	}
 
-	if (!(g_slav_status_reg & BIT(31))) {
+	if (!(g_slav_status_reg & BIT(31)) || !s2a_status) {
 		SLATECOM_ERR("Slate boot is not complete, skip SPI resume\n");
 		goto unlock;
 	}

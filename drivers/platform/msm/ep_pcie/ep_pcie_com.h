@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __EP_PCIE_COM_H
@@ -92,6 +92,8 @@
 #define PCIE20_PARF_L1SS_SLEEP_MHI_FWD_ENABLE		BIT(4)
 
 #define PCIE20_PARF_L1SS_SLEEP_MODE_HANDLER_CONFIG	0x4D4
+
+#define PCIE20_PARF_LINK_DOWN_ECAM_BLOCK	0x608
 
 #define PCIE20_PARF_ATU_BASE_ADDR      0x634
 #define PCIE20_PARF_ATU_BASE_ADDR_HI   0x638

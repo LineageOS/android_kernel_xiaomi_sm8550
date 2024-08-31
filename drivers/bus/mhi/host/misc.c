@@ -1274,7 +1274,7 @@ int mhi_process_misc_tsync_ev_ring(struct mhi_controller *mhi_cntrl,
 				   struct mhi_event *mhi_event,
 				   u32 event_quota)
 {
-	struct mhi_tre *dev_rp;
+	struct mhi_ring_element *dev_rp;
 	struct mhi_ring *ev_ring = &mhi_event->ring;
 	struct mhi_event_ctxt *er_ctxt =
 		&mhi_cntrl->mhi_ctxt->er_ctxt[mhi_event->er_index];
@@ -1384,7 +1384,7 @@ int mhi_process_misc_bw_ev_ring(struct mhi_controller *mhi_cntrl,
 				struct mhi_event *mhi_event,
 				u32 event_quota)
 {
-	struct mhi_tre *dev_rp;
+	struct mhi_ring_element *dev_rp;
 	struct mhi_ring *ev_ring = &mhi_event->ring;
 	struct mhi_event_ctxt *er_ctxt =
 		&mhi_cntrl->mhi_ctxt->er_ctxt[mhi_event->er_index];

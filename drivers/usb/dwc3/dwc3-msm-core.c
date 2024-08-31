@@ -68,10 +68,6 @@
 #define DWC3_GUSB3PIPECTL_DISRXDETU3	BIT(22)
 #define DWC3_GUCTL_SPRSCTRLTRANSEN	BIT(17)
 
-#define DWC3_LLUCTL	0xd024
-/* Force Gen1 speed on Gen2 link */
-#define DWC3_LLUCTL_FORCE_GEN1	BIT(10)
-
 #define DWC31_LINK_GDBGLTSSM	0xd050
 #define DWC3_GDBGLTSSM_LINKSTATE_MASK	(0xF << 22)
 
@@ -558,6 +554,7 @@ struct dwc3_msm {
 #define PWR_EVENT_HS_WAKEUP	BIT(1)
 	bool			host_poweroff_in_pm_suspend;
 	bool			disable_host_ssphy_powerdown;
+	bool			enable_host_slow_suspend;
 	unsigned long		lpm_flags;
 	unsigned int		vbus_draw;
 #define MDWC3_SS_PHY_SUSPEND		BIT(0)
@@ -612,7 +609,6 @@ struct dwc3_msm {
 	phys_addr_t		ebc_desc_addr;
 	bool			dis_sending_cm_l1_quirk;
 	bool			use_eusb2_phy;
-	bool			force_gen1;
 	bool			cached_dis_u1_entry_quirk;
 	bool			cached_dis_u2_entry_quirk;
 	int			refcnt_dp_usb;
@@ -3467,13 +3463,6 @@ static void dwc3_dis_sleep_mode(struct dwc3_msm *mdwc)
 	dwc3_msm_write_reg(mdwc->base, DWC3_GUCTL1, reg);
 }
 
-/* Force Gen1 speed on Gen2 controller if required */
-static void dwc3_force_gen1(struct dwc3_msm *mdwc)
-{
-	if (mdwc->force_gen1 && (mdwc->ip == DWC31_IP))
-		dwc3_msm_write_reg_field(mdwc->base, DWC3_LLUCTL, DWC3_LLUCTL_FORCE_GEN1, 1);
-}
-
 static int dwc3_msm_power_collapse_por(struct dwc3_msm *mdwc)
 {
 	struct dwc3 *dwc = NULL;
@@ -3520,8 +3509,6 @@ static int dwc3_msm_power_collapse_por(struct dwc3_msm *mdwc)
 		if (mdwc->dis_sending_cm_l1_quirk)
 			mdwc3_dis_sending_cm_l1(mdwc);
 	}
-
-	dwc3_force_gen1(mdwc);
 
 	return 0;
 }
@@ -5748,8 +5735,6 @@ static int dwc3_msm_core_init(struct dwc3_msm *mdwc)
 	if (!mdwc->xhci_pm_ops)
 		goto free_dwc_pm_ops;
 
-	dwc3_force_gen1(mdwc);
-
 	dwc3_msm_notify_event(dwc, DWC3_GSI_EVT_BUF_ALLOC, 0);
 	pm_runtime_set_autosuspend_delay(dwc->dev, 0);
 	pm_runtime_allow(dwc->dev);
@@ -5931,6 +5916,9 @@ static int dwc3_msm_parse_params(struct dwc3_msm *mdwc, struct device_node *node
 	mdwc->disable_host_ssphy_powerdown = of_property_read_bool(node,
 				"qcom,disable-host-ssphy-powerdown");
 
+	mdwc->enable_host_slow_suspend = of_property_read_bool(node,
+				"qcom,enable_host_slow_suspend");
+
 	mdwc->dis_sending_cm_l1_quirk = of_property_read_bool(node,
 				"qcom,dis-sending-cm-l1-quirk");
 
@@ -5960,8 +5948,6 @@ static int dwc3_msm_parse_params(struct dwc3_msm *mdwc, struct device_node *node
 		dev_dbg(dev, "setting pm-qos-latency to zero.\n");
 		mdwc->pm_qos_latency = 0;
 	}
-
-	mdwc->force_gen1 = of_property_read_bool(node, "qcom,force-gen1");
 
 	wcd_node = of_parse_phandle(node, "qcom,wcd_usbss", 0);
 	if (of_device_is_available(wcd_node))
@@ -6524,6 +6510,17 @@ static int dwc3_msm_host_notifier(struct notifier_block *nb,
 	struct dwc3_msm *mdwc = container_of(nb, struct dwc3_msm, host_nb);
 	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
 	struct usb_device *udev = ptr;
+
+	if (event == USB_BUS_ADD && mdwc->enable_host_slow_suspend) {
+		struct usb_bus *ubus = ptr;
+		struct usb_hcd *hcd = bus_to_hcd(ubus);
+		struct xhci_hcd *xhci = hcd_to_xhci(hcd);
+
+		if (usb_hcd_is_primary_hcd(hcd)) {
+			dev_dbg(ubus->controller, "enable slow suspend\n");
+			xhci->quirks |= XHCI_SLOW_SUSPEND;
+		}
+	}
 
 	if (event != USB_DEVICE_ADD && event != USB_DEVICE_REMOVE)
 		return NOTIFY_DONE;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -117,6 +117,7 @@ static int entry_dwc3_gadget_reset_interrupt(struct kretprobe_instance *ri,
 {
 	struct dwc3 *dwc = (struct dwc3 *)regs->regs[0];
 
+	dwc3_core_stop_hw_active_transfers(dwc);
 	dwc3_msm_notify_event(dwc, DWC3_CONTROLLER_NOTIFY_CLEAR_DB, 0);
 	return 0;
 }
