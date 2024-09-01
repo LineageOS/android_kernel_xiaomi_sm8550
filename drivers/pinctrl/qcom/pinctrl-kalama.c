@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -21,6 +21,7 @@
 
 #define REG_BASE 0x100000
 #define REG_SIZE 0x1000
+#define REG_DIRCONN 0xfb000
 #define PINGROUP(id, f1, f2, f3, f4, f5, f6, f7, f8, f9, wake_off, bit) \
 	{                                                               \
 		.name = "gpio" #id,                                     \
@@ -31,6 +32,8 @@
 		.intr_cfg_reg = REG_BASE + 0x8 + REG_SIZE * id,         \
 		.intr_status_reg = REG_BASE + 0xc + REG_SIZE * id,      \
 		.intr_target_reg = REG_BASE + 0x8 + REG_SIZE * id,      \
+		.dir_conn_reg = REG_BASE + REG_DIRCONN,			\
+		.dir_conn_en_bit = 8,					\
 		.mux_bit = 2,                                           \
 		.pull_bit = 0,                                          \
 		.drv_bit = 6,                                           \
@@ -2444,6 +2447,11 @@ static const struct msm_gpio_wakeirq_map kalama_pdc_map_v2[] = {
 	{ 207, 47 },  { 208, 121 }, { 209, 122 },
 };
 
+static struct msm_dir_conn kalama_dir_conn[] = {
+	{-1, 0}, {14, 215}, {15, 216}, {-1, 0}, {-1, 0},
+	{-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}
+};
+
 static const struct msm_pinctrl_soc_data kalama_pinctrl = {
 	.pins = kalama_pins,
 	.npins = ARRAY_SIZE(kalama_pins),
@@ -2480,6 +2488,7 @@ static const struct msm_pinctrl_soc_data kalama_vm_pinctrl = {
 	.groups = kalama_groups,
 	.ngroups = ARRAY_SIZE(kalama_groups),
 	.ngpios = 211,
+	.dir_conn = kalama_dir_conn,
 };
 
 static const struct of_device_id kalama_pinctrl_of_match[] = {
