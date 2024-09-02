@@ -21,7 +21,7 @@
 
 #define EUSB2_3P0_VOL_MIN			3075000 /* uV */
 #define EUSB2_3P0_VOL_MAX			3300000 /* uV */
-#define EUSB2_3P0_HPM_LOAD			3500	/* uA */
+#define EUSB2_3P0_HPM_LOAD			12000	/* uA */
 
 #define EUSB2_1P8_VOL_MIN			1800000 /* uV */
 #define EUSB2_1P8_VOL_MAX			1800000 /* uV */
