@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2021-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -67,9 +67,23 @@
 #define INT_STATUS_1			0xA3
 #define INT_STATUS_2			0xA4
 
+/* Diodes eUSB2 repeater PI3EUSB1100 registers */
+#define DIODES_PI3EUSB1100_M_F_CONTROL				0x00
+#define DIODES_PI3EUSB1100_USB2_TX_EQ_CONTROL			0x01
+#define DIODES_PI3EUSB1100_USB2_TX_EQ_OUT_CURRENT_CONTROL	0x02
+#define DIODES_PI3EUSB1100_USB2_RX_EQ_CONTROL			0x03
+#define DIODES_PI3EUSB1100_USB2_RX_EQ_SSS_CONTROL		0x04
+#define DIODES_PI3EUSB1100_USB2_SDO_CONTROL			0x05
+#define DIODES_PI3EUSB1100_USB2_TX_OUT_SWING_CONTROL		0x06
+#define DIODES_PI3EUSB1100_USB2_FS_OUT_DDSS_CONTROL		0x07
+#define DIODES_PI3EUSB1100_REV_ID				0x14
+#define DIODES_PI3EUSB1100_DEV_ID_LO				0x15
+#define DIODES_PI3EUSB1100_DEV_ID_HI				0x16
+
 enum eusb2_repeater_type {
 	TI_REPEATER,
 	NXP_REPEATER,
+	DIODES_REPEATER_PI3EUSB1100,
 };
 
 struct i2c_repeater_chip {
@@ -258,6 +272,9 @@ static int eusb2_repeater_init(struct usb_repeater *ur)
 	case NXP_REPEATER:
 		eusb2_i2c_read_reg(er, REVISION_ID, &reg_val);
 		break;
+	case DIODES_REPEATER_PI3EUSB1100:
+		eusb2_i2c_read_reg(er, DIODES_PI3EUSB1100_REV_ID, &reg_val);
+		break;
 	default:
 		dev_err(er->ur.dev, "Invalid repeater\n");
 	}
@@ -307,6 +324,9 @@ static struct i2c_repeater_chip repeater_chip[] = {
 	},
 	[TI_REPEATER] = {
 		.repeater_type = TI_REPEATER,
+	},
+	[DIODES_REPEATER_PI3EUSB1100] = {
+		.repeater_type = DIODES_REPEATER_PI3EUSB1100,
 	}
 };
 
@@ -318,6 +338,10 @@ static const struct of_device_id eusb2_repeater_id_table[] = {
 	{
 		.compatible = "ti,eusb2-repeater",
 		.data = &repeater_chip[TI_REPEATER]
+	},
+	{
+		.compatible = "diodes,eusb2-repeater-PI3EUSB1100",
+		.data = &repeater_chip[DIODES_REPEATER_PI3EUSB1100]
 	},
 	{ },
 };
