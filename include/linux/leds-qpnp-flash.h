@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __LEDS_QPNP_FLASH_H
@@ -17,7 +18,7 @@
 
 int qpnp_flash_register_led_prepare(struct device *dev, void *data);
 
-#if IS_ENABLED(CONFIG_LEDS_QPNP_FLASH_V2)
+#if (IS_ENABLED(CONFIG_LEDS_QTI_FLASH) || IS_ENABLED(CONFIG_LEDS_QPNP_FLASH_V2))
 int qpnp_flash_led_prepare(struct led_trigger *trig, int options,
 					int *max_current);
 #else
