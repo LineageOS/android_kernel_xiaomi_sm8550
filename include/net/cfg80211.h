@@ -1555,12 +1555,14 @@ struct cfg80211_ap_settings {
  * Used to configure AP MLO Interface
  *
  * @num_mlo_links: number of MLO links.
+ * @reconfig: whether reconfiguration or not
  * @mlo_link_ids: Array of link ids.
  * @mlo_mac_addrs: Array of MLO MAC address.
  */
 #define MAX_NUM_MLO_LINKS 16
 struct cfg80211_mlo_info {
 	u8 num_mlo_links;
+	bool reconfig;
 	u32 mlo_link_ids[MAX_NUM_MLO_LINKS];
 	struct mac_address mlo_mac_addrs[MAX_NUM_MLO_LINKS];
 };
@@ -4895,8 +4897,13 @@ struct cfg80211_ops {
 			    struct cfg80211_ap_settings *settings);
 	int	(*change_beacon)(struct wiphy *wiphy, struct net_device *dev,
 				 struct cfg80211_beacon_data *info);
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	int	(*stop_ap)(struct wiphy *wiphy, struct net_device *dev,
 			   unsigned int link_id);
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+	int	(*stop_ap)(struct wiphy *wiphy, struct net_device *dev,
+			   struct cfg80211_ap_settings *settings);
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 
 	int	(*add_station)(struct wiphy *wiphy, struct net_device *dev,
@@ -8379,6 +8386,7 @@ void cfg80211_roamed(struct net_device *dev, struct cfg80211_roam_info *info,
 void cfg80211_port_authorized(struct net_device *dev, const u8 *bssid,
 			      const u8* td_bitmap, u8 td_bitmap_len, gfp_t gfp);
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 /**
  * cfg80211_disconnected - notify cfg80211 that connection was dropped
  *
@@ -8395,6 +8403,25 @@ void cfg80211_port_authorized(struct net_device *dev, const u8 *bssid,
 void cfg80211_disconnected(struct net_device *dev, u16 reason,
 			   const u8 *ie, size_t ie_len,
 			   bool locally_generated, gfp_t gfp);
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+/**
+ * cfg80211_disconnected - notify cfg80211 that connection was dropped
+ *
+ * @dev: network device
+ * @ie: information elements of the deauth/disassoc frame (may be %NULL)
+ * @ie_len: length of IEs
+ * @reason: reason code for the disconnection, set it to 0 if unknown
+ * @locally_generated: disconnection was requested locally
+ * @link_id: link_id of AP for non-AP STA MLD
+ * @gfp: allocation flags
+ *
+ * After it calls this function, the driver should enter an idle state
+ * and not try to connect to any AP any more.
+ */
+void cfg80211_disconnected(struct net_device *dev, u16 reason,
+			   const u8 *ie, size_t ie_len,
+			   bool locally_generated, int link_id, gfp_t gfp);
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 /**
  * cfg80211_ready_on_channel - notification of remain_on_channel start

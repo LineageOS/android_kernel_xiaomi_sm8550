@@ -57,6 +57,9 @@
 #define NL80211_EDMG_CHANNELS_MIN	1
 #define NL80211_EDMG_CHANNELS_MAX	0x3c /* 0b00111100 */
 
+#define NL80211_MLD_MAX_NUM_LINKS	15 /* Max Num of MLD Links */
+#define NL80211_MLO_INVALID_LINK_ID	-1
+
 /**
  * DOC: Station handling
  *
@@ -2784,6 +2787,7 @@ enum nl80211_commands {
  * @NL80211_ATTR_MLD_REFERENCE: MLD Reference.
  * @NL80211_ATTR_MLD_LINK_IDS: nested attribute to hold MLD link-ids.
  * @NL80211_ATTR_MLD_LINK_MACS: nested attribute to hold MLD mac addrs.
+ * @NL80211_ATTR_RECONFIG: whether the operation is reconfiguration or not
  *
  * @NUM_NL80211_ATTR: total number of nl80211_attrs available
  * @NL80211_ATTR_MAX: highest attribute number currently defined
@@ -3335,6 +3339,7 @@ enum nl80211_attrs {
 	NL80211_ATTR_MLD_REFERENCE,
 	NL80211_ATTR_MLD_LINK_IDS,
 	NL80211_ATTR_MLD_LINK_MACS,
+	NL80211_ATTR_RECONFIG,
 
 	/* add attributes here, update the policy in nl80211.c */
 

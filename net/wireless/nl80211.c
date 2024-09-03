@@ -818,6 +818,9 @@ static const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
 	[NL80211_ATTR_MLD_REFERENCE] = { .type = NLA_U32 },
 	[NL80211_ATTR_MLD_LINK_MACS] = { .type = NLA_NESTED },
 	[NL80211_ATTR_MLD_LINK_IDS] = { .type = NLA_NESTED },
+	[NL80211_ATTR_RECONFIG] = { .type = NLA_FLAG },
+	[NL80211_ATTR_MLO_LINK_ID] =
+		NLA_POLICY_RANGE(NLA_U8, 0, NL80211_MLD_MAX_NUM_LINKS),
 
 };
 
@@ -6150,6 +6153,9 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
 			i++;
 		}
 	}
+
+	params->mlo_info.reconfig =
+		nla_get_flag(info->attrs[NL80211_ATTR_RECONFIG]);
 #endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	if (info->attrs[NL80211_ATTR_UNSOL_BCAST_PROBE_RESP]) {
@@ -6253,7 +6259,7 @@ static int nl80211_stop_ap(struct sk_buff *skb, struct genl_info *info)
 	unsigned int link_id = nl80211_link_id(info->attrs);
 	struct net_device *dev = info->user_ptr[1];
 
-	return cfg80211_stop_ap(rdev, dev, link_id, false);
+	return cfg80211_stop_ap(rdev, dev, link_id, false, info);
 }
 
 static const struct nla_policy sta_flags_policy[NL80211_STA_FLAG_MAX + 1] = {
@@ -18192,9 +18198,16 @@ void nl80211_send_port_authorized(struct cfg80211_registered_device *rdev,
 	nlmsg_free(msg);
 }
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 void nl80211_send_disconnected(struct cfg80211_registered_device *rdev,
 			       struct net_device *netdev, u16 reason,
 			       const u8 *ie, size_t ie_len, bool from_ap)
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+void nl80211_send_disconnected(struct cfg80211_registered_device *rdev,
+			       struct net_device *netdev, u16 reason,
+			       const u8 *ie, size_t ie_len, bool from_ap,
+			       int link_id)
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 {
 	struct sk_buff *msg;
 	void *hdr;
@@ -18215,6 +18228,10 @@ void nl80211_send_disconnected(struct cfg80211_registered_device *rdev,
 	     nla_put_u16(msg, NL80211_ATTR_REASON_CODE, reason)) ||
 	    (from_ap &&
 	     nla_put_flag(msg, NL80211_ATTR_DISCONNECTED_BY_AP)) ||
+#ifdef CFG80211_PROP_MULTI_LINK_SUPPORT
+	    (link_id >= 0 && link_id <= NL80211_MLD_MAX_NUM_LINKS &&
+	     nla_put_u8(msg, NL80211_ATTR_MLO_LINK_ID, link_id)) ||
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 	    (ie && nla_put(msg, NL80211_ATTR_IE, ie_len, ie)))
 		goto nla_put_failure;
 
