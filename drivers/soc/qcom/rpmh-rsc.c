@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2016-2018, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s " fmt, KBUILD_MODNAME
@@ -1466,7 +1466,7 @@ const struct device *rpmh_rsc_get_device(const char *name, u32 drv_id)
 	struct rsc_drv_top *rsc_top = rpmh_rsc_get_top_device(name);
 	int i;
 
-	if (IS_ERR(rsc_top))
+	if (IS_ERR(rsc_top) || strcmp(name, "cam_rsc"))
 		return ERR_PTR(-ENODEV);
 
 	for (i = 0; i < rsc_top->drv_count; i++) {
