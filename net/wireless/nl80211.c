@@ -1894,6 +1894,12 @@ nl80211_send_iftype_data(struct sk_buff *msg,
 			    &eht_cap->eht_mcs_nss_supp))
 			return -ENOBUFS;
 	}
+
+	if (sband->band == NL80211_BAND_6GHZ &&
+	    nla_put(msg, NL80211_BAND_IFTYPE_ATTR_HE_6GHZ_CAPA,
+		    sizeof(iftdata->he_6ghz_capa),
+		    &iftdata->he_6ghz_capa))
+		return -ENOBUFS;
 #endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	return 0;
@@ -3217,6 +3223,7 @@ static bool nl80211_can_set_dev_channel(struct wireless_dev *wdev)
 		wdev->iftype == NL80211_IFTYPE_P2P_GO;
 }
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 static int nl80211_parse_punct_bitmap(struct cfg80211_registered_device *rdev,
 				      struct genl_info *info,
 				      const struct cfg80211_chan_def *chandef,
@@ -3231,6 +3238,7 @@ static int nl80211_parse_punct_bitmap(struct cfg80211_registered_device *rdev,
 
 	return 0;
 }
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 int nl80211_parse_chandef(struct cfg80211_registered_device *rdev,
 			  struct genl_info *info,
@@ -6031,6 +6039,7 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
 		goto out;
 	}
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	if (info->attrs[NL80211_ATTR_PUNCT_BITMAP]) {
 		err = nl80211_parse_punct_bitmap(rdev, info,
 						 &params->chandef,
@@ -6038,6 +6047,7 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
 		if (err)
 			goto out;
 	}
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT  */
 
 	if (!cfg80211_reg_can_beacon_relax(&rdev->wiphy, &params->chandef,
 					   wdev->iftype)) {
@@ -7094,9 +7104,9 @@ static int nl80211_set_station_tdls(struct genl_info *info,
 
 #ifdef CFG80211_PROP_MULTI_LINK_SUPPORT
 	if (info->attrs[NL80211_ATTR_EHT_CAPABILITY]) {
-		params->eht_capa =
+		params->link_sta_params.eht_capa =
 			nla_data(info->attrs[NL80211_ATTR_EHT_CAPABILITY]);
-		params->eht_capa_len =
+		params->link_sta_params.eht_capa_len =
 			nla_len(info->attrs[NL80211_ATTR_EHT_CAPABILITY]);
 	}
 #endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
@@ -7399,6 +7409,7 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
 		params.link_sta_params.he_capa_len =
 			nla_len(info->attrs[NL80211_ATTR_HE_CAPABILITY]);
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 		if (info->attrs[NL80211_ATTR_EHT_CAPABILITY]) {
 			params.link_sta_params.eht_capa =
 				nla_data(info->attrs[NL80211_ATTR_EHT_CAPABILITY]);
@@ -7411,11 +7422,21 @@ static int nl80211_new_station(struct sk_buff *skb, struct genl_info *info)
 							false))
 				return -EINVAL;
 		}
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 	}
 
 	if (info->attrs[NL80211_ATTR_HE_6GHZ_CAPABILITY])
 		params.link_sta_params.he_6ghz_capa =
 			nla_data(info->attrs[NL80211_ATTR_HE_6GHZ_CAPABILITY]);
+
+#ifdef CFG80211_PROP_MULTI_LINK_SUPPORT
+	if (info->attrs[NL80211_ATTR_EHT_CAPABILITY]) {
+		params.link_sta_params.eht_capa =
+			nla_data(info->attrs[NL80211_ATTR_EHT_CAPABILITY]);
+		params.link_sta_params.eht_capa_len =
+			nla_len(info->attrs[NL80211_ATTR_EHT_CAPABILITY]);
+	}
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	if (info->attrs[NL80211_ATTR_OPMODE_NOTIF]) {
 		params.link_sta_params.opmode_notif_used = true;
@@ -10240,6 +10261,7 @@ skip_beacons:
 	if (info->attrs[NL80211_ATTR_CH_SWITCH_BLOCK_TX])
 		params.block_tx = true;
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	if (info->attrs[NL80211_ATTR_PUNCT_BITMAP]) {
 		err = nl80211_parse_punct_bitmap(rdev, info,
 						 &params.chandef,
@@ -10247,6 +10269,7 @@ skip_beacons:
 		if (err)
 			goto free;
 	}
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	wdev_lock(wdev);
 	err = rdev_channel_switch(rdev, dev, &params);
@@ -17449,7 +17472,11 @@ static struct genl_family nl80211_fam __ro_after_init = {
 	.name = NL80211_GENL_NAME,	/* have users key off the name instead */
 	.hdrsize = 0,			/* no private header */
 	.version = 1,			/* no particular meaning now */
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	.maxattr = NL80211_ATTR_PUNCT_BITMAP,
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+	.maxattr = NL80211_ATTR_MAX,
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 	.policy = nl80211_policy,
 	.netnsok = true,
 	.pre_doit = nl80211_pre_doit,
@@ -18183,10 +18210,12 @@ void nl80211_send_port_authorized(struct cfg80211_registered_device *rdev,
 	    nla_put(msg, NL80211_ATTR_MAC, ETH_ALEN, bssid))
 		goto nla_put_failure;
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	if ((td_bitmap_len > 0) && td_bitmap)
 		if (nla_put(msg, NL80211_ATTR_TD_BITMAP,
 			    td_bitmap_len, td_bitmap))
 			goto nla_put_failure;
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	genlmsg_end(msg, hdr);
 
@@ -19217,8 +19246,10 @@ static void nl80211_ch_switch_notify(struct cfg80211_registered_device *rdev,
 			goto nla_put_failure;
 	}
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	if (nla_put_u32(msg, NL80211_ATTR_PUNCT_BITMAP, punct_bitmap))
 		goto nla_put_failure;
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	genlmsg_end(msg, hdr);
 

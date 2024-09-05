@@ -1887,8 +1887,8 @@ struct ieee80211_eht_operation {
  * described in 11be Draft
  */
 struct ieee80211_eht_cap_elem {
-	u8 mac_cap_info[6]; /* TBD */
-	u8 phy_cap_info[11]; /* TBD */
+	u8 mac_cap_info[2]; /* TBD */
+	u8 phy_cap_info[9]; /* TBD */
 } __packed;
 #endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
