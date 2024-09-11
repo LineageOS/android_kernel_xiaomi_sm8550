@@ -24,6 +24,8 @@ ifneq ($(CONFIG_CFG80211_EXTRA_REGDB_KEYDIR),)
 cfg80211-y += extra-certs.o
 endif
 
+ccflags-$(CONFIG_CFG80211_PROP_MULTI_LINK_SUPPORT) += -DCFG80211_PROP_MULTI_LINK_SUPPORT
+
 $(obj)/shipped-certs.c: $(wildcard $(srctree)/$(src)/certs/*.hex)
 	@$(kecho) "  GEN     $@"
 	@(echo '#include "reg.h"'; \

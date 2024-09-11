@@ -36,6 +36,14 @@ config CFG80211
 
 	  When built as a module it will be called cfg80211.
 
+config CFG80211_PROP_MULTI_LINK_SUPPORT
+	tristate "cfg80211 - wireless configuration for MLO feature"
+	help
+	  Enable this option if wireless driver needs to operate in
+	  vendor-specific implementation of Multi Link Operation (MLO)
+	  feature, otherwise driver operates in cfg80211's default
+	  Multi Link Operation feature.
+
 if CFG80211
 
 config NL80211_TESTMODE
