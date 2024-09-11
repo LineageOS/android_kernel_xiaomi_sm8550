@@ -1679,14 +1679,15 @@ static int slatecom_pm_prepare(struct device *dev)
 		SLATECOM_INFO("spi is already inactive, get_sync.\n");
 		pm_runtime_get_sync(&s_dev->dev);
 		usleep_range(5000, 10000);
-	} else {
+	} else
 		SLATECOM_INFO("spi is already active, skip get_sync.\n");
-	}
-
 	atomic_set(&ok_to_sleep, 1);
 	ret = slatecom_reg_write_cmd(&clnt_handle, SLATE_CMND_REG, 1, &cmnd_reg, true);
-	if (ret < 0)
+	if (ret < 0) {
 		atomic_set(&ok_to_sleep, 0);
+		atomic_set(&slate_is_spi_active, 1);
+		return ret;
+	}
 
 	(!atomic_read(&slate_is_spi_active)) ? pm_runtime_put_sync(&s_dev->dev)
 			: SLATECOM_INFO("spi is already active, skip put_sync...\n");

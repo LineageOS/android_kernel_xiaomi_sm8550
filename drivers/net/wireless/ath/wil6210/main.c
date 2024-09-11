@@ -350,10 +350,18 @@ static void _wil6210_disconnect_complete(struct wil6210_vif *vif,
 
 		if (test_and_clear_bit(wil_vif_fwconnected, vif->status)) {
 			atomic_dec(&wil->connected_vifs);
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 			cfg80211_disconnected(ndev, reason_code,
 					      NULL, 0,
 					      vif->locally_generated_disc,
 					      GFP_KERNEL);
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+			cfg80211_disconnected(ndev, reason_code,
+					      NULL, 0,
+					      vif->locally_generated_disc,
+					      NL80211_MLO_INVALID_LINK_ID,
+					      GFP_KERNEL);
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 			vif->locally_generated_disc = false;
 		} else if (test_bit(wil_vif_fwconnecting, vif->status)) {
 			cfg80211_connect_result(ndev, bssid, NULL, 0, NULL, 0,

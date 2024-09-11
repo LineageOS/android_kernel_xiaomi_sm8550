@@ -411,6 +411,23 @@ struct ieee80211_sta_eht_cap {
 	struct ieee80211_eht_mcs_nss_supp eht_mcs_nss_supp;
 	u8 eht_ppe_thres[IEEE80211_EHT_PPE_THRES_MAX_LEN];
 };
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+/**
+ * struct ieee80211_sta_eht_cap - STA's EHT capabilities
+ *
+ * This structure describes most essential parameters needed
+ * to describe 802.11be EHT capabilities for a STA.
+ *
+ * @has_eht: true if EHT data is valid.
+ * @eht_cap_elem: Fixed portion of the EHTcapabilities element.
+ * @eht_mcs_nss_supp: The supported NSS/MCS combinations.
+ */
+struct ieee80211_sta_eht_cap {
+	bool has_eht;
+	struct ieee80211_eht_cap_elem eht_cap_elem;
+	struct ieee80211_eht_mcs_nss_supp eht_mcs_nss_supp;
+};
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 /**
  * struct ieee80211_sband_iftype_data - sband data per interface type
@@ -448,45 +465,6 @@ struct ieee80211_sband_iftype_data {
 	ANDROID_VENDOR_DATA(3);
 	ANDROID_VENDOR_DATA(4);
 };
-#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
-/**
- * struct ieee80211_sta_eht_cap - STA's EHT capabilities
- *
- * This structure describes most essential parameters needed
- * to describe 802.11be EHT capabilities for a STA.
- *
- * @has_eht: true if EHT data is valid.
- * @eht_cap_elem: Fixed portion of the EHTcapabilities element.
- * @eht_mcs_nss_supp: The supported NSS/MCS combinations.
- */
-struct ieee80211_sta_eht_cap {
-	bool has_eht;
-	struct ieee80211_eht_cap_elem eht_cap_elem;
-	struct ieee80211_eht_mcs_nss_supp eht_mcs_nss_supp;
-};
-
-/**
- * struct ieee80211_sband_iftype_data - sband data per interface type
- *
- * This structure encapsulates sband data that is relevant for the
- * interface types defined in @types_mask.  Each type in the
- * @types_mask must be unique across all instances of iftype_data.
- *
- * @types_mask: interface types mask
- * @he_cap: holds the HE capabilities
- * @eht_cap: holds the EHT capabilities.
- */
-struct ieee80211_sband_iftype_data {
-	u16 types_mask;
-	struct ieee80211_sta_he_cap he_cap;
-	struct ieee80211_he_6ghz_capa he_6ghz_capa;
-	struct ieee80211_sta_eht_cap eht_cap;
-	struct {
-		const u8 *data;
-		unsigned int len;
-	} vendor_elems;
-};
-#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 /**
  * enum ieee80211_edmg_bw_config - allowed channel bandwidth configurations
@@ -1532,7 +1510,9 @@ struct cfg80211_ap_settings {
 	struct cfg80211_fils_discovery fils_discovery;
 	struct cfg80211_unsol_bcast_probe_resp unsol_bcast_probe_resp;
 	struct cfg80211_mbssid_config mbssid_config;
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	u16 punct_bitmap;
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	ANDROID_BACKPORT_RESERVED(1);
 	ANDROID_BACKPORT_RESERVED(2);
@@ -1555,12 +1535,14 @@ struct cfg80211_ap_settings {
  * Used to configure AP MLO Interface
  *
  * @num_mlo_links: number of MLO links.
+ * @reconfig: whether reconfiguration or not
  * @mlo_link_ids: Array of link ids.
  * @mlo_mac_addrs: Array of MLO MAC address.
  */
 #define MAX_NUM_MLO_LINKS 16
 struct cfg80211_mlo_info {
 	u8 num_mlo_links;
+	bool reconfig;
 	u32 mlo_link_ids[MAX_NUM_MLO_LINKS];
 	struct mac_address mlo_mac_addrs[MAX_NUM_MLO_LINKS];
 };
@@ -1672,7 +1654,9 @@ struct cfg80211_csa_settings {
 	bool radar_required;
 	bool block_tx;
 	u8 count;
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	u16 punct_bitmap;
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 	ANDROID_BACKPORT_RESERVED(1);
 	ANDROID_BACKPORT_RESERVED(2);
@@ -1941,7 +1925,6 @@ struct station_parameters {
  * @eht_capa_len: the length of the EHT capabilities
  */
 struct station_parameters {
-	const u8 *supported_rates;
 	struct net_device *vlan;
 	u32 sta_flags_mask, sta_flags_set;
 	u32 sta_modify_mask;
@@ -1949,11 +1932,8 @@ struct station_parameters {
 	u16 aid;
 	u16 vlan_id;
 	u16 peer_aid;
-	u8 supported_rates_len;
 	u8 plink_action;
 	u8 plink_state;
-	const struct ieee80211_ht_cap *ht_capa;
-	const struct ieee80211_vht_cap *vht_capa;
 	u8 uapsd_queues;
 	u8 max_sp;
 	enum nl80211_mesh_power_mode local_pm;
@@ -1964,16 +1944,9 @@ struct station_parameters {
 	u8 supported_channels_len;
 	const u8 *supported_oper_classes;
 	u8 supported_oper_classes_len;
-	u8 opmode_notif;
-	bool opmode_notif_used;
 	int support_p2p_ps;
-	const struct ieee80211_he_cap_elem *he_capa;
-	u8 he_capa_len;
 	u16 airtime_weight;
-	struct sta_txpwr txpwr;
-	const struct ieee80211_he_6ghz_capa *he_6ghz_capa;
-	const struct ieee80211_eht_cap_elem *eht_capa;
-	u8 eht_capa_len;
+	struct link_station_parameters link_sta_params;
 };
 #endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
@@ -4895,8 +4868,13 @@ struct cfg80211_ops {
 			    struct cfg80211_ap_settings *settings);
 	int	(*change_beacon)(struct wiphy *wiphy, struct net_device *dev,
 				 struct cfg80211_beacon_data *info);
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 	int	(*stop_ap)(struct wiphy *wiphy, struct net_device *dev,
 			   unsigned int link_id);
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+	int	(*stop_ap)(struct wiphy *wiphy, struct net_device *dev,
+			   struct cfg80211_ap_settings *settings);
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 
 	int	(*add_station)(struct wiphy *wiphy, struct net_device *dev,
@@ -8379,6 +8357,7 @@ void cfg80211_roamed(struct net_device *dev, struct cfg80211_roam_info *info,
 void cfg80211_port_authorized(struct net_device *dev, const u8 *bssid,
 			      const u8* td_bitmap, u8 td_bitmap_len, gfp_t gfp);
 
+#ifndef CFG80211_PROP_MULTI_LINK_SUPPORT
 /**
  * cfg80211_disconnected - notify cfg80211 that connection was dropped
  *
@@ -8395,6 +8374,25 @@ void cfg80211_port_authorized(struct net_device *dev, const u8 *bssid,
 void cfg80211_disconnected(struct net_device *dev, u16 reason,
 			   const u8 *ie, size_t ie_len,
 			   bool locally_generated, gfp_t gfp);
+#else /* CFG80211_PROP_MULTI_LINK_SUPPORT */
+/**
+ * cfg80211_disconnected - notify cfg80211 that connection was dropped
+ *
+ * @dev: network device
+ * @ie: information elements of the deauth/disassoc frame (may be %NULL)
+ * @ie_len: length of IEs
+ * @reason: reason code for the disconnection, set it to 0 if unknown
+ * @locally_generated: disconnection was requested locally
+ * @link_id: link_id of AP for non-AP STA MLD
+ * @gfp: allocation flags
+ *
+ * After it calls this function, the driver should enter an idle state
+ * and not try to connect to any AP any more.
+ */
+void cfg80211_disconnected(struct net_device *dev, u16 reason,
+			   const u8 *ie, size_t ie_len,
+			   bool locally_generated, int link_id, gfp_t gfp);
+#endif /* CFG80211_PROP_MULTI_LINK_SUPPORT */
 
 /**
  * cfg80211_ready_on_channel - notification of remain_on_channel start

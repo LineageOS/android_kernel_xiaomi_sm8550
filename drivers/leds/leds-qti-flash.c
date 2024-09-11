@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #define pr_fmt(fmt)	"qti-flash: %s: " fmt, __func__
 
 #include <linux/errno.h>
 #include <linux/gpio.h>
 #include <linux/hrtimer.h>
+#include <linux/iio/consumer.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/led-class-flash.h>
@@ -64,6 +65,11 @@
 #define  FLASH_LED_STROBE_SEL_SHIFT		2
 
 #define FLASH_EN_LED_CTRL			0x4E
+
+#define FLASH_LED_IBATT_OCP_THRESH_DEFAULT_UA	2500000
+#define FLASH_LED_RPARA_DEFAULT_UOHM		80000
+#define VPH_DROOP_THRESH_VAL_UV			3400000
+
 #define  FLASH_LED_ENABLE(id)			BIT(id)
 #define  FLASH_LED_DISABLE			0
 
@@ -91,7 +97,10 @@
 #define OTST2_CURR_LIM_MA			500
 #define VLED_MAX_DEFAULT_UV			3500000
 
-#define LED_MASK_ALL(led)		GENMASK(led->max_channels - 1, 0)
+#define LED_MASK_ALL(led)		GENMASK(led->data->max_channels - 1, 0)
+
+#define FORCE_TORCH_MODE		0x68
+#define FORCE_TORCH			BIT(0)
 
 enum flash_led_type {
 	FLASH_LED_TYPE_UNKNOWN,
@@ -117,6 +126,11 @@ enum thermal_levels {
 	OTST1_IDX,
 	OTST2_IDX,
 	OTST_MAX,
+};
+
+enum pmic_type {
+	PM8350C,
+	PM2250,
 };
 
 struct flash_node_data {
@@ -150,6 +164,27 @@ struct flash_switch_data {
 	bool				symmetry_en;
 };
 
+struct pmic_data {
+	u8	max_channels;
+	int	pmic_type;
+};
+
+enum qti_flash_iio_props {
+	RBATT,
+	OCV,
+	IBAT,
+	F_TRIGGER,
+	F_ACTIVE,
+};
+
+static char *qti_flash_iio_prop_names[] = {
+	[RBATT] = "rbatt",
+	[OCV] = "voltage_ocv",
+	[IBAT] = "current_now",
+	[F_TRIGGER] = "flash_trigger",
+	[F_ACTIVE] = "flash_active",
+};
+
 /**
  * struct qti_flash_led: Main Flash LED data structure
  * @pdev:			Pointer for platform device
@@ -170,8 +205,6 @@ struct flash_switch_data {
  * @base:			Base address of the flash LED module
  * @revision:			Revision of the flash LED module
  * @subtype:			Peripheral subtype of the flash LED module
- * @max_channels:		Maximum number of channels supported by flash
- *				module
  * @chan_en_map:		Bit map of individual channel enable
  * @module_en:			Flag used to enable/disable flash LED module
  * @trigger_lmh:		Flag to enable lmh mitigation
@@ -186,6 +219,9 @@ struct qti_flash_led {
 	struct flash_node_data		*fnode;
 	struct flash_switch_data	*snode;
 	struct power_supply		*batt_psy;
+	struct power_supply		*usb_psy;
+	struct iio_channel		**iio_channels;
+	struct pmic_data		*data;
 	spinlock_t			lock;
 	u32				num_fnodes;
 	u32				num_snodes;
@@ -193,12 +229,12 @@ struct qti_flash_led {
 	int				all_ramp_up_done_irq;
 	int				all_ramp_down_done_irq;
 	int				led_fault_irq;
+	int				ibatt_ocp_threshold_ua;
 	int				max_current;
 	int				thermal_derate_current[OTST_MAX];
 	u16				base;
 	u8				revision;
 	u8				subtype;
-	u8				max_channels;
 	u8				chan_en_map;
 	bool				module_en;
 	bool				trigger_lmh;
@@ -313,6 +349,105 @@ static int qti_flash_led_masked_write(struct qti_flash_led *led,
 	return rc;
 }
 
+static int qti_flash_get_iio_chan(struct qti_flash_led *led,
+				  enum qti_flash_iio_props chan)
+{
+	int rc = 0;
+
+	/*
+	 * if the channel pointer is not-NULL and has a ERR value it has
+	 * already been queried upon earlier, hence return from here.
+	 */
+	if (IS_ERR(led->iio_channels[chan]))
+		return -EINVAL;
+
+	if (!led->iio_channels[chan]) {
+		led->iio_channels[chan] = iio_channel_get(&led->pdev->dev,
+						qti_flash_iio_prop_names[chan]);
+		if (IS_ERR(led->iio_channels[chan])) {
+			rc = PTR_ERR(led->iio_channels[chan]);
+			if (rc == -EPROBE_DEFER) {
+				led->iio_channels[chan] = NULL;
+				return rc;
+			}
+			pr_err("%s channel unavailable %d\n",
+				qti_flash_iio_prop_names[chan], rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
+static int qti_flash_iio_getprop(struct qti_flash_led *led,
+				 enum qti_flash_iio_props chan, int *data)
+{
+	int rc = 0;
+
+	rc = qti_flash_get_iio_chan(led, chan);
+	if (rc < 0)
+		return rc;
+
+	rc = iio_read_channel_processed(led->iio_channels[chan], data);
+	if (rc < 0)
+		pr_err("Error in reading IIO channel data rc = %d\n", rc);
+
+	return rc;
+}
+
+static int qti_flash_iio_setprop(struct qti_flash_led *led,
+				  enum qti_flash_iio_props chan, int data)
+{
+	int rc = 0;
+
+	rc = qti_flash_get_iio_chan(led, chan);
+	if (rc < 0)
+		return rc;
+
+	rc = iio_write_channel_raw(led->iio_channels[chan], data);
+	if (rc < 0)
+		pr_err("Error in writing IIO channel data rc = %d\n", rc);
+
+	return rc;
+}
+
+static int qti_flash_poll_vreg_ok(struct qti_flash_led *led)
+{
+	int rc, i, pval;
+
+	if (led->data->pmic_type != PM2250)
+		return 0;
+
+	for (i = 0; i < 60; i++) {
+		/* wait for the flash vreg_ok to be set */
+		mdelay(5);
+
+		rc = qti_flash_iio_getprop(led, F_TRIGGER, &pval);
+		if (rc < 0) {
+			pr_err("Failure reading Flash trigger prop rc = %d\n",
+			   rc);
+			return rc;
+		}
+
+		if (pval > 0) {
+			pr_debug("Flash trigger set\n");
+			break;
+		}
+
+		if (pval < 0) {
+			pr_err("Error during flash trigger %d\n", pval);
+			return pval;
+		}
+	}
+
+	if (!pval) {
+		pr_err("Failed to enable the module\n");
+		return -ETIMEDOUT;
+	}
+
+	return 0;
+}
+
 static int qti_flash_led_module_control(struct qti_flash_led *led,
 				bool enable)
 {
@@ -328,6 +463,18 @@ static int qti_flash_led_module_control(struct qti_flash_led *led,
 				return rc;
 
 			led->module_en = true;
+		}
+
+		val = FLASH_MODULE_DISABLE;
+		rc = qti_flash_poll_vreg_ok(led);
+		if (rc < 0) {
+			/* Disable the module */
+			rc = qti_flash_led_write(led, FLASH_ENABLE_CONTROL,
+						&val, 1);
+			if (rc < 0)
+				return rc;
+
+			led->module_en = false;
 		}
 	} else {
 		if (led->module_en && !led->chan_en_map) {
@@ -376,13 +523,26 @@ static int qti_flash_led_strobe(struct qti_flash_led *led,
 	spin_lock(&led->lock);
 
 	if (enable) {
-		for (i = 0; i < led->max_channels; i++)
+		for (i = 0; i < led->data->max_channels; i++)
 			if ((mask & BIT(i)) && (value & BIT(i)))
 				led->chan_en_map |= BIT(i);
 
 		rc = qti_flash_led_module_control(led, enable);
 		if (rc < 0)
 			goto error;
+
+		for (i = 0; i < led->num_fnodes; i++) {
+			if ((mask & BIT(led->fnode[i].id)) &&
+				led->fnode[i].configured &&
+				led->fnode[i].type == FLASH_LED_TYPE_TORCH &&
+						led->subtype == 0x6) {
+				rc = qti_flash_led_masked_write(led,
+						FORCE_TORCH_MODE,
+					FORCE_TORCH, FORCE_TORCH);
+				if (rc < 0)
+					goto error;
+			}
+		}
 
 		if (snode && snode->off_time_ms) {
 			pr_debug("Off timer started with delay %d ms\n",
@@ -397,7 +557,7 @@ static int qti_flash_led_strobe(struct qti_flash_led *led,
 		if (rc < 0)
 			goto error;
 	} else {
-		for (i = 0; i < led->max_channels; i++)
+		for (i = 0; i < led->data->max_channels; i++)
 			if ((led->chan_en_map & BIT(i)) &&
 			    (mask & BIT(i)) && !(value & BIT(i)))
 				led->chan_en_map &= ~(BIT(i));
@@ -406,6 +566,18 @@ static int qti_flash_led_strobe(struct qti_flash_led *led,
 				mask, value);
 		if (rc < 0)
 			goto error;
+
+		for (i = 0; i < led->num_fnodes; i++) {
+			if ((mask & BIT(led->fnode[i].id)) &&
+				led->fnode[i].configured &&
+				led->fnode[i].type == FLASH_LED_TYPE_TORCH &&
+					led->subtype == 0x6) {
+				rc = qti_flash_led_masked_write(led,
+					FORCE_TORCH_MODE, FORCE_TORCH, 0);
+				if (rc < 0)
+					goto error;
+			}
+		}
 
 		if (led->trigger_lmh) {
 			rc = qti_flash_lmh_mitigation_config(led, false);
@@ -881,7 +1053,7 @@ static enum hrtimer_restart on_timer_function(struct hrtimer *timer)
 
 int qti_flash_led_set_param(struct led_trigger *trig,
 					struct flash_led_param param)
-{
+					{
 	struct led_classdev *led_cdev = trigger_to_lcdev(trig);
 	struct flash_switch_data *snode;
 
@@ -903,6 +1075,19 @@ int qti_flash_led_set_param(struct led_trigger *trig,
 }
 EXPORT_SYMBOL(qti_flash_led_set_param);
 
+static int is_usb_psy_available(struct qti_flash_led *led)
+{
+	if (!led->usb_psy) {
+		led->usb_psy = power_supply_get_by_name("usb");
+		if (!led->usb_psy) {
+			pr_err_ratelimited("Couldn't get usb_psy\n");
+			return -ENODEV;
+		}
+	}
+
+	return 0;
+}
+
 #define UCONV			1000000LL
 #define MCONV			1000LL
 #define VIN_FLASH_MIN_UV	3300000LL
@@ -910,6 +1095,131 @@ EXPORT_SYMBOL(qti_flash_led_set_param);
 #define VFLASH_DIP_MARGIN_UV	50000
 #define VOLTAGE_HDRM_DEFAULT_MV		400
 #define VDIP_THRESH_DEFAULT_UV		2800000LL
+#define CHGBST_EFFICIENCY		800LL
+#define CHGBST_FLASH_VDIP_MARGIN	10000
+#define VIN_FLASH_UV			5000000
+#define VIN_FLASH_RANGE_1		4250000
+#define VIN_FLASH_RANGE_2		4500000
+#define VIN_FLASH_RANGE_3		4750000
+#define OCV_RANGE_1			3800000
+#define OCV_RANGE_2			4100000
+#define OCV_RANGE_3			4350000
+#define BHARGER_FLASH_LED_MAX_TOTAL_CURRENT_MA		1000
+static int qti_flash_led_calc_bharger_max_current(struct qti_flash_led *led,
+							int *max_current)
+{
+	union power_supply_propval pval = {0, };
+	int ocv_uv, ibat_now, flash_led_max_total_curr_ma, rc;
+	int rbatt_uohm = 0, usb_present, otg_enable;
+	int64_t ibat_flash_ua, avail_flash_ua, avail_flash_power_fw;
+	int64_t ibat_safe_ua, vin_flash_uv = 0, vph_flash_uv, vph_flash_vdip;
+
+	if (led->data->pmic_type != PM2250)
+		return 0;
+
+	rc = is_usb_psy_available(led);
+	if (rc < 0)
+		return rc;
+
+	rc = power_supply_get_property(led->usb_psy, POWER_SUPPLY_PROP_SCOPE,
+					&pval);
+	if (rc < 0) {
+		pr_err("usb psy does not support usb present, rc=%d\n", rc);
+		return rc;
+	}
+	otg_enable = pval.intval;
+
+	/* RESISTANCE = esr_uohm + rslow_uohm */
+	rc = qti_flash_iio_getprop(led, RBATT, &rbatt_uohm);
+	if (rc < 0) {
+		pr_err("bms psy does not support resistance, rc=%d\n", rc);
+		return rc;
+	}
+
+	/* If no battery is connected, return max possible flash current */
+	if (!rbatt_uohm) {
+		*max_current = BHARGER_FLASH_LED_MAX_TOTAL_CURRENT_MA;
+		return 0;
+	}
+
+	rc = qti_flash_iio_getprop(led, OCV, &ocv_uv);
+	if (rc < 0) {
+		pr_err("bms psy does not support OCV, rc=%d\n", rc);
+		return rc;
+	}
+
+	rc = qti_flash_iio_getprop(led, IBAT, &ibat_now);
+	if (rc < 0) {
+		pr_err("bms psy does not support current, rc=%d\n", rc);
+		return rc;
+	}
+
+	rc = power_supply_get_property(led->usb_psy, POWER_SUPPLY_PROP_PRESENT,
+							&pval);
+	if (rc < 0) {
+		pr_err("usb psy does not support usb present, rc=%d\n", rc);
+		return rc;
+	}
+	usb_present = pval.intval;
+
+	rbatt_uohm += FLASH_LED_RPARA_DEFAULT_UOHM;
+
+	vph_flash_vdip = VPH_DROOP_THRESH_VAL_UV + CHGBST_FLASH_VDIP_MARGIN;
+
+	/*
+	 * Calculate the maximum current that can pulled out of the battery
+	 * before the battery voltage dips below a safe threshold.
+	 */
+	ibat_safe_ua = div_s64((ocv_uv - vph_flash_vdip) * UCONV,
+				rbatt_uohm);
+
+	if (ibat_safe_ua <= led->ibatt_ocp_threshold_ua) {
+		/*
+		 * If the calculated current is below the OCP threshold, then
+		 * use it as the possible flash current.
+		 */
+		ibat_flash_ua = ibat_safe_ua - ibat_now;
+		vph_flash_uv = vph_flash_vdip;
+	} else {
+		/*
+		 * If the calculated current is above the OCP threshold, then
+		 * use the ocp threshold instead.
+		 *
+		 * Any higher current will be tripping the battery OCP.
+		 */
+		ibat_flash_ua = led->ibatt_ocp_threshold_ua - ibat_now;
+		vph_flash_uv = ocv_uv - div64_s64((int64_t)rbatt_uohm
+				* led->ibatt_ocp_threshold_ua, UCONV);
+	}
+
+	/* when USB is present or OTG is enabled, VIN_FLASH is always at 5V */
+	if (usb_present || (otg_enable == POWER_SUPPLY_SCOPE_SYSTEM))
+		vin_flash_uv = VIN_FLASH_UV;
+	else if (ocv_uv <= OCV_RANGE_1)
+		vin_flash_uv = VIN_FLASH_RANGE_1;
+	else if (ocv_uv  > OCV_RANGE_1 && ocv_uv <= OCV_RANGE_2)
+		vin_flash_uv = VIN_FLASH_RANGE_2;
+	else if (ocv_uv > OCV_RANGE_2 && ocv_uv <= OCV_RANGE_3)
+		vin_flash_uv = VIN_FLASH_RANGE_3;
+
+	/* Calculate the available power for the flash module. */
+	avail_flash_power_fw = CHGBST_EFFICIENCY * vph_flash_uv * ibat_flash_ua;
+	/*
+	 * Calculate the available amount of current the flash module can draw
+	 * before collapsing the battery. (available power/ flash input voltage)
+	 */
+	avail_flash_ua = div64_s64(avail_flash_power_fw, vin_flash_uv * MCONV);
+
+	flash_led_max_total_curr_ma = BHARGER_FLASH_LED_MAX_TOTAL_CURRENT_MA;
+	*max_current = min(flash_led_max_total_curr_ma,
+			(int)(div64_s64(avail_flash_ua, MCONV)));
+
+	pr_debug("avail_iflash=%lld, ocv=%d, ibat=%d, rbatt=%d,max_current=%lld, usb_present=%d, otg_enable = %d\n",
+		avail_flash_ua, ocv_uv, ibat_now, rbatt_uohm,
+		(*max_current * MCONV), usb_present, otg_enable);
+
+	return 0;
+}
 
 static int qti_flash_led_get_voltage_headroom(
 					struct qti_flash_led *led)
@@ -1101,6 +1411,50 @@ static int qti_flash_led_get_max_avail_current(
 	return 0;
 }
 
+
+static int qti_flash_led_regulator_control(struct led_classdev *led_cdev,
+					int options)
+{
+	struct flash_switch_data *snode;
+	int rc = 0, ret;
+	struct led_classdev_flash *fdev = NULL;
+	struct qti_flash_led *led;
+	struct flash_node_data *fnode;
+
+	fdev = container_of(led_cdev, struct led_classdev_flash, led_cdev);
+	fnode = container_of(fdev, struct flash_node_data, fdev);
+	led = fnode->led;
+
+	snode = container_of(led_cdev, struct flash_switch_data, cdev);
+
+	if (snode->led->data->pmic_type != PM2250)
+		return 0;
+
+	if (options & ENABLE_REGULATOR) {
+		ret = 1;
+		rc = qti_flash_iio_setprop(led, F_ACTIVE, ret);
+		if (rc < 0) {
+			pr_err("Failed to set FLASH_ACTIVE on charger rc=%d\n",
+							rc);
+			return rc;
+		}
+
+		pr_debug("FLASH_ACTIVE = 1\n");
+	} else if (options & DISABLE_REGULATOR) {
+		ret = 0;
+		rc = qti_flash_iio_setprop(led, F_ACTIVE, ret);
+		if (rc < 0) {
+			pr_err("Failed to set FLASH_ACTIVE on charger rc=%d\n",
+							rc);
+			return rc;
+		}
+
+		pr_debug("FLASH_ACTIVE = 0\n");
+	}
+
+	return 0;
+}
+
 int qti_flash_led_prepare(struct led_trigger *trig, int options,
 				int *max_current)
 {
@@ -1127,18 +1481,58 @@ int qti_flash_led_prepare(struct led_trigger *trig, int options,
 			return -EINVAL;
 		}
 
-		rc = qti_flash_led_get_max_avail_current(snode->led,
+		if (snode->led->data->pmic_type == PM2250) {
+			rc = qti_flash_led_calc_bharger_max_current(snode->led,
 					max_current);
-		if (rc < 0) {
-			pr_err("Failed to query max avail current, rc=%d\n",
-				rc);
-			return rc;
+			if (rc < 0) {
+				pr_err("Failed to query max avail current, rc=%d\n",
+					rc);
+				*max_current = snode->led->max_current;
+				return rc;
+			}
+		} else {
+			rc = qti_flash_led_get_max_avail_current(snode->led,
+						max_current);
+			if (rc < 0) {
+				pr_err("Failed to query max avail current, rc=%d\n",
+					rc);
+				return rc;
+			}
 		}
 	}
 
-	return 0;
+	rc = qti_flash_led_regulator_control(led_cdev, options);
+	if (rc < 0)
+		pr_err("Failed to set flash control options\n");
+
+	return rc;
 }
 EXPORT_SYMBOL(qti_flash_led_prepare);
+
+static ssize_t qti_flash_led_prepare_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int rc, options;
+	u32 val;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+
+	rc = kstrtouint(buf, 0, &val);
+	if (rc < 0)
+		return rc;
+
+	if (val != 0 && val != 1)
+		return count;
+
+	options = val ? ENABLE_REGULATOR : DISABLE_REGULATOR;
+
+	rc = qti_flash_led_regulator_control(led_cdev, options);
+	if (rc < 0) {
+		pr_err("failed to query led regulator\n");
+		return rc;
+	}
+
+	return count;
+}
 
 static ssize_t qti_flash_led_max_current_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -1148,8 +1542,13 @@ static ssize_t qti_flash_led_max_current_show(struct device *dev,
 	int rc;
 
 	snode = container_of(led_cdev, struct flash_switch_data, cdev);
-	rc = qti_flash_led_get_max_avail_current(snode->led,
-				&snode->led->max_current);
+	if (snode->led->data->pmic_type == PM2250) {
+		rc = qti_flash_led_calc_bharger_max_current(snode->led,
+					&snode->led->max_current);
+	} else {
+		rc = qti_flash_led_get_max_avail_current(snode->led,
+					&snode->led->max_current);
+	}
 	if (rc < 0) {
 		pr_err("Failed to get max current, rc=%d\n", rc);
 		return -EINVAL;
@@ -1227,6 +1626,7 @@ static struct device_attribute qti_flash_led_attrs[] = {
 		qti_flash_on_time_store),
 	__ATTR(off_time, 0600, qti_flash_off_time_show,
 		qti_flash_off_time_store),
+	__ATTR(enable, 0664, NULL, qti_flash_led_prepare_store),
 };
 
 static int qti_flash_brightness_set_blocking(
@@ -1715,11 +2115,11 @@ static int qti_flash_led_register_device(struct qti_flash_led *led,
 	led->base = val;
 
 	led->hw_strobe_gpio = devm_kcalloc(&led->pdev->dev,
-			led->max_channels, sizeof(u32), GFP_KERNEL);
+			led->data->max_channels, sizeof(u32), GFP_KERNEL);
 	if (!led->hw_strobe_gpio)
 		return -ENOMEM;
 
-	for (i = 0; i < led->max_channels; i++) {
+	for (i = 0; i < led->data->max_channels; i++) {
 
 		led->hw_strobe_gpio[i] = -EINVAL;
 
@@ -1842,6 +2242,15 @@ static int qti_flash_led_register_device(struct qti_flash_led *led,
 		}
 	}
 
+	led->ibatt_ocp_threshold_ua = FLASH_LED_IBATT_OCP_THRESH_DEFAULT_UA;
+	rc = of_property_read_u32(node, "qcom,ibatt-ocp-threshold-ua", &val);
+	if (!rc) {
+		led->ibatt_ocp_threshold_ua = val;
+	} else if (rc != -EINVAL) {
+		pr_err("Unable to parse ibatt_ocp threshold, rc=%d\n", rc);
+		return rc;
+	}
+
 	return 0;
 
 unreg_led:
@@ -1886,13 +2295,19 @@ static int qti_flash_led_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	led->max_channels = (u8)(uintptr_t)of_device_get_match_data(&pdev->dev);
-	if (!led->max_channels) {
-		pr_err("Failed to get max supported led channels\n");
+	led->data = (struct pmic_data *)of_device_get_match_data(&pdev->dev);
+	if (!led->data) {
+		pr_err("Failed to get match_data\n");
 		return -EINVAL;
 	}
 
 	led->pdev = pdev;
+	led->iio_channels = devm_kcalloc(&pdev->dev,
+				ARRAY_SIZE(qti_flash_iio_prop_names),
+				sizeof(struct iio_channel *), GFP_KERNEL);
+	if (!led->iio_channels)
+		return -ENOMEM;
+
 	spin_lock_init(&led->lock);
 
 	rc = qti_flash_led_register_device(led, node);
@@ -1910,6 +2325,12 @@ static int qti_flash_led_probe(struct platform_device *pdev)
 	rc = qti_flash_led_register_interrupts(led);
 	if (rc < 0) {
 		pr_err("Failed to register LED interrupts rc=%d\n", rc);
+		return rc;
+	}
+
+	rc = qpnp_flash_register_led_prepare(&pdev->dev, qti_flash_led_prepare);
+	if (rc < 0) {
+		pr_err("Failed to register flash_led_prepare, rc=%d\n", rc);
 		return rc;
 	}
 
@@ -1970,8 +2391,29 @@ static const struct dev_pm_ops qti_flash_led_pm_ops = {
 	.restore = qti_flash_led_restore,
 };
 
+static const struct pmic_data data[] = {
+	[PM2250] = {
+		.max_channels = 1,
+		.pmic_type = PM2250,
+	},
+
+	[PM8350C] = {
+		.max_channels = 4,
+		.pmic_type = PM8350C,
+	},
+};
+
 static const struct of_device_id qti_flash_led_match_table[] = {
-	{ .compatible = "qcom,pm8350c-flash-led", .data = (void *)4, },
+	{
+		.compatible = "qcom,pm2250-flash-led",
+		.data = &data[PM2250],
+	},
+
+	{
+		.compatible = "qcom,pm8350c-flash-led",
+		.data = &data[PM8350C],
+	},
+
 	{ },
 };
 
