@@ -263,8 +263,6 @@ static int gsx_gesture_ist(struct goodix_ts_core *cd,
 		overlay_area = gesture_data[12];
 		ts_debug("gesture coordinate 0x%x,0x%x,0x%x", fodx, fody,
 			 overlay_area);
-		input_report_key(cd->input_dev, BTN_INFO, 1);
-		input_sync(cd->input_dev);
 #ifdef TYPE_B_PROTOCOL
 		input_mt_slot(cd->input_dev, 0);
 		input_mt_report_slot_state(cd->input_dev, MT_TOOL_FINGER, 1);
@@ -282,7 +280,7 @@ static int gsx_gesture_ist(struct goodix_ts_core *cd,
 		//mi_disp_lhbm_fod_set_finger_event(0, 1, true);
 		cd->fod_finger = true;
 		FP_Event_Gesture = 0;
-		goto re_send_ges_cmd;
+		key_value = BTN_INFO;
 	}
 	if ((FP_Event_Gesture == 1) && (gs_event.gesture_type == 0x55)) {
 		if (cd->fod_finger) {
