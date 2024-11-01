@@ -349,7 +349,7 @@ static void __maybe_unused gh_tlmm_vm_mem_on_release_handler(enum gh_mem_notifie
 	}
 
 	release_payload = (struct gh_rm_notif_mem_released_payload  *)notif_msg;
-	if (release_payload->mem_handle != vm_info->mem_info.vm_mem_handle ||
+	if (release_payload->mem_handle != vm_info->mem_info.vm_mem_handle &&
 	    release_payload->mem_handle != vm_info->lend_mem_info.vm_mem_handle) {
 		dev_err(gh_tlmm_dev, "Invalid mem handle detected\n");
 		return;

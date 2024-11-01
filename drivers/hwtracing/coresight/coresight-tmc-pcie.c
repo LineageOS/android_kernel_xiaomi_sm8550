@@ -52,8 +52,6 @@ static void tmc_pcie_read_bytes(struct tmc_pcie_data *pcie_data, loff_t *ppos,
 
 	actual = tmc_etr_buf_get_data(etr_buf, *ppos, *len, bufp);
 	*len = actual;
-	if (actual == bytes || (actual + (uint32_t)*ppos) % bytes == 0)
-		atomic_dec(&pcie_data->irq_cnt);
 }
 
 static int tmc_pcie_sw_start(struct tmc_pcie_data *pcie_data)
@@ -245,6 +243,9 @@ static void tmc_pcie_write_work_fn(struct work_struct *work)
 			pcie_data->offset += actual;
 
 		pcie_data->total_size += actual;
+		if (actual == PCIE_BLK_SIZE ||
+				pcie_data->total_size % PCIE_BLK_SIZE == 0)
+			atomic_dec(&pcie_data->irq_cnt);
 	}
 }
 
