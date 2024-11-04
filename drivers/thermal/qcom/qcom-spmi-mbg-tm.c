@@ -12,6 +12,7 @@
 #include <linux/thermal.h>
 #include <linux/iio/consumer.h>
 
+#include "thermal_zone_internal.h"
 #include "../thermal_core.h"
 
 #define MBG_TEMP_MON_MM_MON2_FAULT_STATUS 0x50
@@ -168,9 +169,17 @@ static int mbg_tm_set_trip_temp(void *data, int low_thresh, int temp)
 	return ret;
 }
 
+static int mbg_tm_get_trend(void *data, int trip, enum thermal_trend *trend)
+{
+	struct mbg_tm_chip *chip = data;
+
+	return qti_tz_get_trend(chip->tz_dev, trip, trend);
+}
+
 static const struct thermal_zone_of_device_ops mbg_tm_ops = {
 	.get_temp = mbg_tm_get_temp,
 	.set_trips = mbg_tm_set_trip_temp,
+	.get_trend = mbg_tm_get_trend,
 };
 
 static irqreturn_t mbg_tm_isr(int irq, void *data)
