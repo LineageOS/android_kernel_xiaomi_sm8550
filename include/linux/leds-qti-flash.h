@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __LEDS_QTI_FLASH_H
@@ -35,7 +36,7 @@ static inline int qti_flash_led_prepare(struct led_trigger *trig,
 }
 
 static inline int qti_flash_led_set_param(struct led_trigger *trig,
-			struct flash_led_param param);
+			struct flash_led_param param)
 {
 	return -EINVAL;
 }

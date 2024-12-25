@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023, 2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s:%s " fmt, KBUILD_MODNAME, __func__
@@ -215,6 +215,7 @@ static int cpufreq_cdev_probe(struct platform_device *pdev)
 			return -ENOMEM;
 		}
 		cdev_data->cpu = cpu;
+		cdev_data->retry_cnt = MAX_RETRY_CNT;
 		snprintf(cdev_data->cdev_name, THERMAL_NAME_LENGTH,
 				subsys_np->name);
 		INIT_DEFERRABLE_WORK(&cdev_data->register_work, cpufreq_cdev_register);

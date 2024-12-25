@@ -347,6 +347,7 @@ config INTERCONNECT_QCOM_SA410M
 config INTERCONNECT_QCOM_DEBUG
 	tristate "QCOM-specific interconnect debug features"
 	depends on INTERCONNECT_QCOM
+	depends on DEBUG_FS
 	help
           This driver provides QCOM-specific interconnect debug features. These
           features include optionally printing all enabled interconnect votes
