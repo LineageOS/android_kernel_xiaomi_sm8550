@@ -90,6 +90,12 @@ DECLARE_HOOK(android_vh_cma_drain_all_pages_bypass,
 DECLARE_HOOK(android_vh_pcplist_add_cma_pages_bypass,
 	TP_PROTO(int migratetype, bool *bypass),
 	TP_ARGS(migratetype, bypass));
+DECLARE_HOOK(android_vh_slab_alloc_node,
+	TP_PROTO(void *object, unsigned long addr, struct kmem_cache *s),
+	TP_ARGS(object, addr, s));
+DECLARE_HOOK(android_vh_slab_free,
+	TP_PROTO(unsigned long addr, struct kmem_cache *s),
+	TP_ARGS(addr, s));
 DECLARE_HOOK(android_vh_free_unref_page_bypass,
 	TP_PROTO(struct page *page, int order, int migratetype, bool *bypass),
 	TP_ARGS(page, order, migratetype, bypass));
@@ -300,6 +306,18 @@ DECLARE_HOOK(android_vh_uprobes_replace_page,
 DECLARE_HOOK(android_vh_shmem_swapin_page,
 	TP_PROTO(struct page *page),
 	TP_ARGS(page));
+DECLARE_HOOK(android_vh_should_end_madvise,
+	TP_PROTO(struct mm_struct *mm, bool *skip, bool *pageout),
+	TP_ARGS(mm, skip, pageout));
+DECLARE_HOOK(android_vh_io_statistics,
+	TP_PROTO(struct address_space *mapping, unsigned int index,
+			unsigned int nr_page, bool read, bool direct),
+	TP_ARGS(mapping, index, nr_page, read, direct));
+DECLARE_HOOK(android_vh_page_cache_miss,
+	TP_PROTO(struct file *file,
+		pgoff_t start, pgoff_t len,
+		pgoff_t index, bool buffer),
+	TP_ARGS(file, start, len, index, buffer));
 #endif /* _TRACE_HOOK_MM_H */
 
 /* This part must be outside protection */

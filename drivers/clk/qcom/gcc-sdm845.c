@@ -4275,3 +4275,4 @@ module_exit(gcc_sdm845_exit);
 MODULE_DESCRIPTION("QTI GCC SDM845 Driver");
 MODULE_LICENSE("GPL v2");
 MODULE_ALIAS("platform:sdm845-gcc");
+MODULE_SOFTDEP("pre: rpmhpd");
