@@ -283,7 +283,7 @@ enum xm_property_id {
 	XM_PROP_GET_LEARNING_POWER_DEV_B,
 	/*********nvt fuelgauge feature*********/
 	/*fuelgauge test node*/
-	XM_PROP_FG1_QMAX = 131,
+	XM_PROP_FG1_QMAX = 136,
 	XM_PROP_FG1_RM,
 	XM_PROP_FG1_FCC,
 	XM_PROP_FG1_SOH,
