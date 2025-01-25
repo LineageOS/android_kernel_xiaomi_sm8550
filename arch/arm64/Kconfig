@@ -2225,3 +2225,7 @@ config TARGET_PRODUCT_FUXI
 config TARGET_PRODUCT_SOCRATES
 	bool "Target product is socrates"
 	default n
+	
+config TARGET_PRODUCT_NUWA
+	bool "Target product is nuwa"
+	default n
