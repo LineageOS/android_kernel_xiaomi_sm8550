@@ -2229,3 +2229,7 @@ config TARGET_PRODUCT_SOCRATES
 config TARGET_PRODUCT_NUWA
 	bool "Target product is nuwa"
 	default n
+
+config TARGET_PRODUCT_VERMEER
+        bool "Target product is vermeer"
+        default n
