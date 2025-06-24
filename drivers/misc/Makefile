@@ -65,4 +65,5 @@ obj-$(CONFIG_QSEECOM_PROXY) 	+= qseecom_proxy.o
 obj-$(CONFIG_QPNP_MISC)		+= qpnp-misc.o
 obj-$(CONFIG_PROFILER)		+= profiler.o
 obj-$(CONFIG_QRC)		+= qrc/
+obj-$(CONFIG_HDMI_INPUT_MUX)	+= hdmi_input_mux.o
 obj-$(CONFIG_MI_HARDWARE_ID) += hwid/

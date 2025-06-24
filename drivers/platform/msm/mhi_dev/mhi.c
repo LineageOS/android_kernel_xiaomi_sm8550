@@ -44,7 +44,7 @@
 /* Wait time on the device for Host to set BHI_INTVEC */
 #define MHI_BHI_INTVEC_MAX_CNT			200
 #define MHI_BHI_INTVEC_WAIT_MS		50
-#define MHI_WAKEUP_TIMEOUT_CNT		20
+#define MHI_WAKEUP_TIMEOUT_CNT		25
 #define MHI_MASK_CH_EV_LEN		32
 #define MHI_RING_CMD_ID			0
 #define MHI_RING_PRIMARY_EVT_ID		1
@@ -4229,7 +4229,7 @@ static void mhi_dev_enable(struct work_struct *work)
 			"Cleared reset before waiting for M0\n");
 	}
 
-	while (state != MHI_DEV_M0_STATE &&
+	while (state != MHI_DEV_M0_STATE && !mhi->stop_polling_m0 &&
 		((max_cnt < MHI_SUSPEND_TIMEOUT) || mhi->no_m0_timeout)) {
 		/* Wait for Host to set the M0 state */
 		msleep(MHI_SUSPEND_MIN);
@@ -4297,6 +4297,11 @@ static void mhi_dev_enable(struct work_struct *work)
 				"Failed to initialize mhi_dev_net iface\n");
 	return;
 exit:
+	/*
+	 * since mhi_dev_enable() is unsuccessful, mhi is not in disconnected
+	 * state as well, so updating MHI state info to invalid state.
+	 */
+	mhi_update_state_info(mhi, MHI_STATE_INVAL);
 	mutex_unlock(&mhi->mhi_lock);
 	return;
 }

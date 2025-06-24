@@ -1023,7 +1023,7 @@ static int ax88179_system_resume(struct ax_device *axdev)
 
 	reg16 = AX_PHYPWR_RSTCTL_IPRL;
 	ax_write_cmd_nopm(axdev, AX_ACCESS_MAC, AX_PHYPWR_RSTCTL, 2, 2, &reg16);
-	msleep(500);
+	msleep(200);
 
 	ax88179_auto_detach(axdev, 1);
 

@@ -33,6 +33,8 @@
 #define MHI_DMA_DISABLE_DELAY_MS	10
 #define MHI_DMA_DISABLE_COUNTER		20
 #define MHI_PF_VALUE			0
+/* Maximum wait time for D state transitions to D3hot */
+#define M3_DO_WAKEUP_TIMEOUT_MS		2500
 
 static struct mhi_dma_ops *mhi_dma_fun_ops;
 
@@ -814,7 +816,7 @@ exit:
  * mhi_sm_wakeup_host() - wakeup MHI-host
  *@event: MHI state chenge event
  *
- * Sends wekup event to MHI-host via EP-PCIe, in case MHI is in M3 state.
+ * Sends wakeup event to MHI-host via EP-PCIe, in case MHI is in M3 state.
  *
  * Return:	0:success
  *		negative: failure
@@ -822,6 +824,7 @@ exit:
 static int mhi_sm_wakeup_host(struct mhi_sm_dev *mhi_sm_ctx, enum mhi_dev_event event)
 {
 	int res = 0;
+	int timeout = 0;
 	enum ep_pcie_event pcie_event;
 	struct mhi_dev *mhi = mhi_sm_ctx->mhi_dev;
 
@@ -834,16 +837,39 @@ static int mhi_sm_wakeup_host(struct mhi_sm_dev *mhi_sm_ctx, enum mhi_dev_event 
 			MHI_SM_ERR(mhi->vf_id, "Failed switching to M0 state\n");
 	} else if (mhi_sm_ctx->mhi_state == MHI_DEV_M3_STATE) {
 		/*
-		 * Check and send D3_HOT to enable waking up the host
-		 * using inband PME.
+		 * Handle host wakeup in M3 + D0 states.
+		 *
+		 * When a MHI WAKE request is received while device is in D0,
+		 * wait for D3 and wakeup the host using inband PME.
+		 * If the MHI state changes to M0 while waiting for D3,
+		 * exit, since both MHI and the device are in active state.
 		 */
+		if (mhi_sm_ctx->d_state == MHI_SM_EP_PCIE_D0_STATE) {
+			timeout = ktime_add_ms(ktime_get(), M3_DO_WAKEUP_TIMEOUT_MS);
+			while (1) {
+				/* Received M0 */
+				if (mhi_sm_ctx->mhi_state == MHI_DEV_M0_STATE)
+					goto exit;
+				/* Received D3 state */
+				if (mhi_sm_ctx->d_state == MHI_SM_EP_PCIE_D3_HOT_STATE ||
+						mhi_sm_ctx->d_state == MHI_SM_EP_PCIE_D3_COLD_STATE)
+					goto wakeup_host;
+				if (ktime_after(ktime_get(), timeout)) {
+					MHI_SM_ERR(mhi->vf_id,
+					 "M3, D0 wakeup host is not supported %d\n", res);
+					goto exit;
+				}
+				fsleep(1000);
+			}
+		}
+wakeup_host:
+		/* Received D3hot or D3cold, send the wakeup request */
 		if (mhi_sm_ctx->d_state == MHI_SM_EP_PCIE_D3_HOT_STATE)
 			pcie_event = EP_PCIE_EVENT_PM_D3_HOT;
 		else
 			pcie_event = EP_PCIE_EVENT_PM_D3_COLD;
-
 		res = ep_pcie_wakeup_host(mhi_sm_ctx->mhi_dev->mhi_hw_ctx->phandle,
-								pcie_event);
+									pcie_event);
 		if (res) {
 			MHI_SM_ERR(mhi->vf_id, "Failed to wakeup MHI host, returned %d\n",
 				res);
@@ -1106,6 +1132,28 @@ static void mhi_sm_pcie_event_manager(struct work_struct *work)
 			MHI_SM_DBG(mhi->vf_id, "Nothing to do, already in D3_COLD state\n");
 			break;
 		}
+
+		/*
+		 * We are here because host reset MHI EP and now transiting to
+		 * D3_COLD. In this case, ring_init_cb_work, queued during host
+		 * reset, would get stuck at M0 polling because host is not
+		 * going to set M0 because host is either uninstallig MHI host
+		 * driver or entering hibernate. What we are doing here is to -
+		 * 1. flush ring_init_wq workqueue before disable EP to avoid
+		 *    race condition.
+		 * 2. update stop_polling_m0 flag to make sure ring_init_cb_work
+		 *    can see it and stop polling M0.
+		 */
+		if (mhi->ctrl_info == MHI_STATE_DISCONNECTED) {
+			mhi->stop_polling_m0 = true;
+			MHI_SM_DBG(mhi->vf_id, "Flush ring_init_wq before disable endpoint\n");
+			flush_workqueue(mhi->ring_init_wq);
+			mhi->stop_polling_m0 = false;
+			/* Avoid backing up mmio twice */
+			if (old_dstate != MHI_SM_EP_PCIE_D3_HOT_STATE)
+				mhi_dev_backup_mmio(mhi_sm_ctx->mhi_dev);
+		}
+
 		ep_pcie_disable_endpoint(mhi_sm_ctx->mhi_dev->mhi_hw_ctx->phandle);
 		mhi_sm_ctx->d_state = MHI_SM_EP_PCIE_D3_COLD_STATE;
 		mhi_sm_ctx->one_d3 = true;
@@ -1148,6 +1196,16 @@ static void mhi_sm_pcie_event_manager(struct work_struct *work)
 		pm_relax(mhi_sm_ctx->mhi_dev->mhi_hw_ctx->dev);
 		break;
 	case EP_PCIE_EVENT_PM_D0:
+		/*
+		 * See also above comments in D3_COLD's case. Previously, since
+		 * ring_init_cb_work has bailed from M0 polling, let's requeue
+		 * it so that it can complete its job.
+		 */
+		if (mhi->ctrl_info == MHI_STATE_INVAL) {
+			MHI_SM_DBG(mhi->vf_id, "mhi_dev_enable() got interrupted, re-start it\n");
+			queue_work(mhi->ring_init_wq, &mhi->ring_init_cb_work);
+		}
+
 		if (old_dstate == MHI_SM_EP_PCIE_D0_STATE) {
 			MHI_SM_DBG(mhi->vf_id, "Nothing to do, already in D0 state\n");
 			break;
