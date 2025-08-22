@@ -689,6 +689,10 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 		if (!quota->ms && !quota->sz)
 			continue;
 
+		/* First charge window */
+		if (!quota->total_charged_sz && !quota->charged_from)
+			quota->charged_from = jiffies;
+
 		/* New charge window starts */
 		if (time_after_eq(jiffies, quota->charged_from +
 					msecs_to_jiffies(
