@@ -88,6 +88,24 @@
       "parentUuid": "2dd77a56_d30cdce0",
       "revId": "09d3c62c5e07b06f8ac57a3cfe784494f87722ef",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "1c9374ae_381a5491",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-09-21T17:05:20Z",
+      "side": 1,
+      "message": "In case of common kernel there\u0027s no diff in this file against CLO. Do you have any diff in your kernel apart from this revert?",
+      "parentUuid": "831056b1_160e59ce",
+      "revId": "09d3c62c5e07b06f8ac57a3cfe784494f87722ef",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ],
   "submitRequirementResults": []
