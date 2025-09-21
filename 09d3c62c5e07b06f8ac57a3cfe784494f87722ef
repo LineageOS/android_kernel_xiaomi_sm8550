@@ -16,6 +16,24 @@
       "message": "Next time, please do not merge things like this without leeting me know. This was a common issue since the very beginning and if it still is you must inform me so that we can all double check if it belongs or not to the common sm8550 kernel.",
       "revId": "09d3c62c5e07b06f8ac57a3cfe784494f87722ef",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "dff40d37_f3722b0a",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 35315
+      },
+      "writtenOn": "2025-09-21T13:33:26Z",
+      "side": 1,
+      "message": "I have asked Chandu and he said it works normally on OnePlus",
+      "parentUuid": "029009a7_aceea936",
+      "revId": "09d3c62c5e07b06f8ac57a3cfe784494f87722ef",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ],
   "submitRequirementResults": []
