@@ -1,4 +1,22 @@
 {
-  "comments": [],
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "029009a7_aceea936",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-09-21T13:23:51Z",
+      "side": 1,
+      "message": "Next time, please do not merge things like this without leeting me know. This was a common issue since the very beginning and if it still is you must inform me so that we can all double check if it belongs or not to the common sm8550 kernel.",
+      "revId": "09d3c62c5e07b06f8ac57a3cfe784494f87722ef",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ],
   "submitRequirementResults": []
 }
