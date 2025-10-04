@@ -565,6 +565,7 @@ mode_valid(struct drm_atomic_state *state)
 	return 0;
 }
 
+#if !defined(CONFIG_TARGET_PRODUCT_VERMEER)
 static int drm_atomic_check_valid_clones(struct drm_atomic_state *state,
 					 struct drm_crtc *crtc)
 {
@@ -588,6 +589,7 @@ static int drm_atomic_check_valid_clones(struct drm_atomic_state *state,
 
 	return 0;
 }
+#endif
 
 /**
  * drm_atomic_helper_check_modeset - validate state object for modeset changes
@@ -760,10 +762,11 @@ drm_atomic_helper_check_modeset(struct drm_device *dev,
 		ret = drm_atomic_add_affected_planes(state, crtc);
 		if (ret != 0)
 			return ret;
-
+#if !defined(CONFIG_TARGET_PRODUCT_VERMEER)
 		ret = drm_atomic_check_valid_clones(state, crtc);
 		if (ret != 0)
 			return ret;
+#endif
 	}
 
 	/*
