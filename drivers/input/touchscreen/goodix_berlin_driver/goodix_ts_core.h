@@ -558,6 +558,8 @@ struct goodix_ts_core {
 	struct delayed_work gesture_work;
 
 	bool nonui_enabled;
+
+	u8 eventsdata;
 };
 
 /* external module structures */
