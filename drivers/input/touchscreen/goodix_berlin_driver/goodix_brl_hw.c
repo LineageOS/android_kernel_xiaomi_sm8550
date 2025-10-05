@@ -42,6 +42,9 @@
 #define GOODIX_IC_INFO_ADDR_BRA		0x10068
 #define GOODIX_IC_INFO_ADDR			0x10070
 
+#if IS_ENABLED(CONFIG_TARGET_PRODUCT_VERMEER)
+#define GOODIX_FOD_COOR_CHECK
+#endif
 
 enum brl_request_code {
 	BRL_REQUEST_CODE_CONFIG = 0x01,
@@ -49,6 +52,24 @@ enum brl_request_code {
 	BRL_REQUEST_CODE_RESET = 0x03,
 	BRL_REQUEST_CODE_CLOCK = 0x04,
 };
+
+#if IS_ENABLED(CONFIG_TARGET_PRODUCT_VERMEER)
+#define GOODIX_FOD_COOR_CHECK
+#define GOODIX_FOD_AREA_CENTER_X 7200
+#define GOODIX_FOD_AREA_CENTER_Y 28820
+#define GOODIX_FOD_AREA_RADIUS 1240
+#endif
+
+#ifdef GOODIX_FOD_COOR_CHECK
+static inline int goodix_is_fod_area_pressed(int report_x, int report_y) {
+	int radius_squared = GOODIX_FOD_AREA_RADIUS * GOODIX_FOD_AREA_RADIUS;
+	int x_diff = report_x - GOODIX_FOD_AREA_CENTER_X;
+	int y_diff = report_y - GOODIX_FOD_AREA_CENTER_Y;
+	int distance_squared = x_diff * x_diff + y_diff * y_diff;
+
+	return distance_squared <= radius_squared;
+}
+#endif
 
 static int brl_select_spi_mode(struct goodix_ts_core *cd)
 {
@@ -1078,6 +1099,7 @@ static int brl_esd_check(struct goodix_ts_core *cd)
 #define GOODIX_GESTURE_EVENT		0x20
 #define POINT_TYPE_STYLUS_HOVER		0x01
 #define POINT_TYPE_STYLUS			0x03
+static u8 fod_area_pressed;
 
 static void goodix_parse_finger(struct goodix_touch_data *touch_data,
 				u8 *buf, int touch_num)
@@ -1085,6 +1107,7 @@ static void goodix_parse_finger(struct goodix_touch_data *touch_data,
 	unsigned int id = 0, x = 0, y = 0, w = 0;
 	u8 *coor_data;
 	int i;
+	fod_area_pressed = false;
 
 	coor_data = &buf[IRQ_EVENT_HEAD_LEN];
 	for (i = 0; i < touch_num; i++) {
@@ -1102,6 +1125,11 @@ static void goodix_parse_finger(struct goodix_touch_data *touch_data,
 		touch_data->coords[id].y = y;
 		touch_data->coords[id].w = w;
 		coor_data += BYTES_PER_POINT;
+
+#ifdef GOODIX_FOD_COOR_CHECK
+		if (!fod_area_pressed && goodix_is_fod_area_pressed(x, y))
+			fod_area_pressed = true;
+#endif
 	}
 	touch_data->touch_num = touch_num;
 }
@@ -1240,6 +1268,9 @@ static int goodix_touch_handler(struct goodix_ts_core *cd,
 	/* process custom info */
 	if (buffer[3] & 0x01)
 		ts_debug("TODO add custom info process function");
+
+ 	if (fod_area_pressed)
+		cd->eventsdata |= 0x08;
 
 	return 0;
 }
