@@ -16,6 +16,24 @@
       "message": "```suggestion\n\t\tand four LDO outputs.\n\n```",
       "revId": "b04d1e0e958ebbcefee26a23fa4cf1603d1d3af5",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "1c1ba610_44106587",
+        "filename": "drivers/regulator/Kconfig",
+        "patchSetId": 1
+      },
+      "lineNbr": 1590,
+      "author": {
+        "id": 34560
+      },
+      "writtenOn": "2025-10-15T16:00:24Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "daf658aa_c864109a",
+      "revId": "b04d1e0e958ebbcefee26a23fa4cf1603d1d3af5",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
