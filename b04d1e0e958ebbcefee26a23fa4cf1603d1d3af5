@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "daf658aa_c864109a",
+        "filename": "drivers/regulator/Kconfig",
+        "patchSetId": 1
+      },
+      "lineNbr": 1590,
+      "author": {
+        "id": 34560
+      },
+      "writtenOn": "2025-10-15T11:48:24Z",
+      "side": 1,
+      "message": "```suggestion\n\t\tand four LDO outputs.\n\n```",
+      "revId": "b04d1e0e958ebbcefee26a23fa4cf1603d1d3af5",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
