@@ -16,6 +16,57 @@
       "message": "Commit message line separation ^^",
       "revId": "944bb54cd1ae24767c03485711e4c503dcb26801",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e86ddb6a_1241a878",
+        "filename": "drivers/input/touchscreen/goodix_berlin_driver/goodix_brl_hw.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 1128,
+      "author": {
+        "id": 34560
+      },
+      "writtenOn": "2025-10-15T11:40:04Z",
+      "side": 1,
+      "message": "excessive space",
+      "revId": "944bb54cd1ae24767c03485711e4c503dcb26801",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ba060332_c6d34d3d",
+        "filename": "drivers/input/touchscreen/goodix_berlin_driver/goodix_brl_hw.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 1271,
+      "author": {
+        "id": 34560
+      },
+      "writtenOn": "2025-10-15T11:40:04Z",
+      "side": 1,
+      "message": "Pls fix the excessive space",
+      "revId": "944bb54cd1ae24767c03485711e4c503dcb26801",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "09d330a6_fd54414c",
+        "filename": "drivers/input/touchscreen/goodix_berlin_driver/goodix_ts_core.h",
+        "patchSetId": 1
+      },
+      "lineNbr": 561,
+      "author": {
+        "id": 34560
+      },
+      "writtenOn": "2025-10-15T11:40:04Z",
+      "side": 1,
+      "message": "same here.",
+      "revId": "944bb54cd1ae24767c03485711e4c503dcb26801",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
