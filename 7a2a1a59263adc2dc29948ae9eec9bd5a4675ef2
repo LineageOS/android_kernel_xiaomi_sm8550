@@ -16,6 +16,23 @@
       "message": "Minus and Lolipuru have tested the merge commit",
       "revId": "7a2a1a59263adc2dc29948ae9eec9bd5a4675ef2",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "bdeec241_09ed3f4d",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 34560
+      },
+      "writtenOn": "2025-10-16T13:51:51Z",
+      "side": 1,
+      "message": "Wait for dts rebase",
+      "revId": "7a2a1a59263adc2dc29948ae9eec9bd5a4675ef2",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
