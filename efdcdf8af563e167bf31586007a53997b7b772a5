@@ -34,6 +34,24 @@
       "parentUuid": "a9ad008d_98cbea00",
       "revId": "efdcdf8af563e167bf31586007a53997b7b772a5",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b2aaccf3_11caf058",
+        "filename": "arch/arm64/configs/vendor/vermeer_GKI.config",
+        "patchSetId": 3
+      },
+      "lineNbr": 18,
+      "author": {
+        "id": 35546
+      },
+      "writtenOn": "2025-10-20T14:54:21Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "a9ad008d_98cbea00",
+      "revId": "efdcdf8af563e167bf31586007a53997b7b772a5",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
