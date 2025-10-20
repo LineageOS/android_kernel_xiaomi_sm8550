@@ -121,6 +121,24 @@
       "parentUuid": "09d330a6_fd54414c",
       "revId": "944bb54cd1ae24767c03485711e4c503dcb26801",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "6be83817_8c04dd76",
+        "filename": "drivers/input/touchscreen/goodix_berlin_driver/goodix_ts_core.h",
+        "patchSetId": 1
+      },
+      "lineNbr": 561,
+      "author": {
+        "id": 35546
+      },
+      "writtenOn": "2025-10-20T14:50:50Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "09d330a6_fd54414c",
+      "revId": "944bb54cd1ae24767c03485711e4c503dcb26801",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
