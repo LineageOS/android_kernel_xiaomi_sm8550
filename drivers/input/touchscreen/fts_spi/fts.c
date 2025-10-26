@@ -2564,7 +2564,8 @@ static inline int32_t thp_crc32_check(int s32_message[], int s32_len)
 static int fts_set_report_rate(struct fts_ts_info *info, u32 rate)
 {
 	int res = 0;
-	u8 rate_cmd[3] = { 0xC0, 0x20, 0x00 };
+	u8 rate_cmd[10] = { 0xC0, 0x05, 0x00, 0x00, 0x64,
+			    0x0F, 0x02, 0x0F, 0x01, 0x04 };
 
 	if (info->sensor_sleep == true || info->resume_bit == 0)
 		return 0;
