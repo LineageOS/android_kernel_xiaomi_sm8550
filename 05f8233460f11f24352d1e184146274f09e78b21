@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "e8791dd4_2ad7e4b1",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 34682
+      },
+      "writtenOn": "2025-12-12T09:06:40Z",
+      "side": 1,
+      "message": "on hold for now, look on sheng-u-oss for proper usb 3 support",
+      "revId": "05f8233460f11f24352d1e184146274f09e78b21",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
