@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2cba7402_49e00e6e",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 36097
+      },
+      "writtenOn": "2025-12-20T16:53:35Z",
+      "side": 1,
+      "message": "hey lunark, check this commit as we solved a *mistake* on seqs\n\nhttps://github.com/Ingres-Centre/android_kernel_xiaomi_sm8450/commit/f1b8ce28320c9d1a0afe7dc8587a6866c1f4e748",
+      "revId": "64bbf30894ccf7fc8f8993df91cb46550b351cb2",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
