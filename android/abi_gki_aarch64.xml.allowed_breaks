@@ -145,3 +145,8 @@ type 'struct task_struct' changed
   member 'u64 android_kabi_reserved1' was removed
   member 'union { struct { unsigned int user_dumpable; }; struct { u64 android_kabi_reserved1; }; union { }; }' was added
 
+type 'struct usb_udc' changed
+  byte size changed from 952 to 960
+  member 'void(* gadget_release)(struct device*)' was added
+  4 members ('struct device dev' .. 'bool started') changed
+    offset changed by 64
