@@ -117,6 +117,7 @@ void cpu_limits_set_level(unsigned int cpu, unsigned int max_freq)
 {
 	struct cpufreq_device *cpufreq_dev;
 	unsigned int level = 0;
+	unsigned long max_cap, max_freq_hz, loss;
 
 	list_for_each_entry (cpufreq_dev, &cpufreq_dev_list, node) {
 		if (cpufreq_dev->id == cpu) {
@@ -126,6 +127,14 @@ void cpu_limits_set_level(unsigned int cpu, unsigned int max_freq)
 					cpufreq_dev->freq_table[level].frequency;
 				if (max_freq >= target_freq) {
 					cpufreq_set_level(cpufreq_dev, level);
+
+					max_cap = arch_scale_cpu_capacity(cpu);
+					max_freq_hz = cpufreq_dev->policy->cpuinfo.max_freq;
+					loss = ((max_freq_hz - target_freq) * max_cap) / max_freq_hz;
+
+					/* Inject the reduction straight into the EAS subsystem */
+					arch_set_thermal_pressure(cpufreq_dev->policy->related_cpus,
+								  loss);
 					break;
 				}
 			}
