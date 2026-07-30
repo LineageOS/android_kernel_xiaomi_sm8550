@@ -16,6 +16,24 @@
       "message": "This can overwrite the thermal pressure reported by the qcom-cpufreq-hw path. If the userspace frequency cap and LMH throttling are active at the same time, the last writer wins instead of reflecting the most restrictive effective cap, which can cause EAS to use an incorrect CPU capacity.",
       "revId": "05cca4ce5395c88e47a70112ecd8172d39d55091",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "837a37d7_7934ed67",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 37431
+      },
+      "writtenOn": "2026-07-30T09:22:02Z",
+      "side": 1,
+      "message": "Yes, it can overwrite the value by LMh and imho we should do. mi_thermal updates the thermal pressure caused by software policy while LMh updates the same pressure caused by hardware LMh throttling. Both mechanisms update the pressure through arch_set_thermal_pressure either independently or cumulatively, and the scheduler will comprehensively process the combined thermal pressure signals from both sources? In practice, cpufreq_cooling.c updates the pressure after freq_qos_update_request calling, but mi_thermal driver just calls freq_qos and does nothing thereafter.",
+      "parentUuid": "5ea637e9_fa15e209",
+      "revId": "05cca4ce5395c88e47a70112ecd8172d39d55091",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
