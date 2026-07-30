@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5ea637e9_fa15e209",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 34560
+      },
+      "writtenOn": "2026-07-30T05:03:57Z",
+      "side": 1,
+      "message": "This can overwrite the thermal pressure reported by the qcom-cpufreq-hw path. If the userspace frequency cap and LMH throttling are active at the same time, the last writer wins instead of reflecting the most restrictive effective cap, which can cause EAS to use an incorrect CPU capacity.",
+      "revId": "05cca4ce5395c88e47a70112ecd8172d39d55091",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
