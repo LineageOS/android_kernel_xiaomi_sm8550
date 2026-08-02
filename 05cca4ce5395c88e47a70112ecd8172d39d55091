@@ -34,6 +34,23 @@
       "parentUuid": "5ea637e9_fa15e209",
       "revId": "05cca4ce5395c88e47a70112ecd8172d39d55091",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a4d105d2_3d710623",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 37431
+      },
+      "writtenOn": "2026-08-02T05:32:23Z",
+      "side": 1,
+      "message": "In practice, any write to scaling_max_freq constitutes a limitation on CPU capacity. Both the cpufreq_cooling and mi_thermal drivers are expected to reflect this limitation by updating the CPU capacity perceived by EAS (Energy-Aware Scheduler) to ensure proper task placement decisions. The upstream kernel has already merged the cpufreq_pressure patch series to address this scenario uniformly. The implementation takes the maximum of thermal_pressure and cpufreq_pressure as the effective capacity degradation for the scheduler. Consequently, my commit serves only as a temporary workaround for the mi_thermal driver and does not represent a generic solution. Since mgame thermal profile (no limits except of extreme heat) is used as default, it actually has no effect in real world. Drop it.",
+      "revId": "05cca4ce5395c88e47a70112ecd8172d39d55091",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
