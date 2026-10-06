@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "d7770530_cbdf7f3f",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 34682
+      },
+      "writtenOn": "2026-10-06T00:43:44Z",
+      "side": 1,
+      "message": "it give me this error, not sure if it\u0027s build env issues\n\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:55: SyntaxWarning: invalid escape sequence \u0027\\w\u0027\n  arg_re \u003d re.compile(\u0027((\\w+ )*?(\\w+|...))( (\\**)(\\w+))?$\u0027)\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:57: SyntaxWarning: invalid escape sequence \u0027\\*\u0027\n  proto_re \u003d re.compile(\u0027(.+) (\\**)(\\w+)\\(((([^,]+)(, )?){1,5})\\)$\u0027)\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:104: SyntaxWarning: invalid escape sequence \u0027\\*\u0027\n  p \u003d re.compile(\u0027 \\* ?(.+)$\u0027)\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:108: SyntaxWarning: invalid escape sequence \u0027\\*\u0027\n  end_re \u003d re.compile(\u0027 \\* ?NOTES$\u0027)\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:123: SyntaxWarning: invalid escape sequence \u0027\\*\u0027\n  p \u003d re.compile(\u0027 \\* ?((.+) \\**\\w+\\((((const )?(struct )?(\\w+|\\.\\.\\.)( \\**\\w+)?)(, )?){1,5}\\))$\u0027)\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:131: SyntaxWarning: invalid escape sequence \u0027\\*\u0027\n  p \u003d re.compile(\u0027 \\* ?(?:\\t| {5,8})Description$\u0027)\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:145: SyntaxWarning: invalid escape sequence \u0027\\*\u0027\n  p \u003d re.compile(\u0027 \\* ?(?:\\t| {5,8})(?:\\t| {8})(.*)\u0027)\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:154: SyntaxWarning: invalid escape sequence \u0027\\*\u0027\n  p \u003d re.compile(\u0027 \\* ?(?:\\t| {5,8})Return$\u0027)\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:168: SyntaxWarning: invalid escape sequence \u0027\\*\u0027\n  p \u003d re.compile(\u0027 \\* ?(?:\\t| {5,8})(?:\\t| {8})(.*)\u0027)\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:375: SyntaxWarning: invalid escape sequence \u0027\\ \u0027\n  license string passed (via **attr**) to the **bpf**\\ () system call, and this\n/home/noodle/rom/los/kernel/xiaomi/sm8550/scripts/bpf_doc.py:457: SyntaxWarning: invalid escape sequence \u0027\\ \u0027",
+      "revId": "9d5787a9b37e3ed5e368b7e635ad6e436a629cfa",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
