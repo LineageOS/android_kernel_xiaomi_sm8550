@@ -851,26 +851,6 @@ static inline int ip6gre_xmit_ipv6(struct sk_buff *skb, struct net_device *dev)
 	return 0;
 }
 
-/**
- * ip6gre_tnl_addr_conflict - compare packet addresses to tunnel's own
- *   @t: the outgoing tunnel device
- *   @hdr: IPv6 header from the incoming packet
- *
- * Description:
- *   Avoid trivial tunneling loop by checking that tunnel exit-point
- *   doesn't match source of incoming packet.
- *
- * Return:
- *   1 if conflict,
- *   0 else
- **/
-
-static inline bool ip6gre_tnl_addr_conflict(const struct ip6_tnl *t,
-	const struct ipv6hdr *hdr)
-{
-	return ipv6_addr_equal(&t->parms.raddr, &hdr->saddr);
-}
-
 static int ip6gre_xmit_other(struct sk_buff *skb, struct net_device *dev)
 {
 	struct ip6_tnl *t = netdev_priv(dev);
@@ -2315,7 +2295,7 @@ static int ip6erspan_changelink(struct net_device *dev, struct nlattr *tb[],
 		return PTR_ERR(t);
 
 	ip6erspan_set_version(data, &p);
-	ip6gre_tunnel_unlink_md(ign, t);
+	ip6erspan_tunnel_unlink_md(ign, t);
 	ip6gre_tunnel_unlink(ign, t);
 	ip6erspan_tnl_change(t, &p, !tb[IFLA_MTU]);
 	ip6erspan_tunnel_link_md(ign, t);

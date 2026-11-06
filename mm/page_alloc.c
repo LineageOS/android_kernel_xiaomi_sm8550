@@ -86,6 +86,9 @@
 EXPORT_TRACEPOINT_SYMBOL_GPL(mm_page_alloc);
 EXPORT_TRACEPOINT_SYMBOL_GPL(mm_page_free);
 
+#undef CREATE_TRACE_POINTS
+#include <trace/hooks/mm.h>
+
 /* Free Page Internal flags: for internal, non-pcp variants of free_pages(). */
 typedef int __bitwise fpi_t;
 
@@ -2607,7 +2610,7 @@ inline void post_alloc_hook(struct page *page, unsigned int order,
 	set_page_owner(page, order, gfp_flags);
 }
 
-static void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags,
+void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags,
 							unsigned int alloc_flags)
 {
 	post_alloc_hook(page, order, gfp_flags);
@@ -2627,6 +2630,7 @@ static void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags
 		clear_page_pfmemalloc(page);
 	trace_android_vh_test_clear_look_around_ref(page);
 }
+EXPORT_SYMBOL_GPL(prep_new_page);
 
 /*
  * Go through the free lists for the given migratetype and remove
@@ -4438,6 +4442,7 @@ retry:
 		}
 
 		mark = wmark_pages(zone, alloc_flags & ALLOC_WMARK_MASK);
+		trace_android_vh_get_page_wmark(alloc_flags, &mark);
 		if (!zone_watermark_fast(zone, order, mark,
 				       ac->highest_zoneidx, alloc_flags,
 				       gfp_mask)) {

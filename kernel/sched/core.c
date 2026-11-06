@@ -2530,6 +2530,7 @@ out_unlock:
 	put_task_struct(p);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(push_cpu_stop);
 
 /*
  * sched_class::set_cpus_allowed must do the below, but is not required to
@@ -7138,6 +7139,10 @@ void set_user_nice(struct task_struct *p, long nice)
 	 */
 	rq = task_rq_lock(p, &rf);
 	update_rq_clock(rq);
+
+	trace_android_rvh_set_user_nice_locked(p, &nice);
+	if (task_nice(p) == nice)
+		goto out_unlock;
 
 	/*
 	 * The RT priorities are set via sched_setscheduler(), but we still

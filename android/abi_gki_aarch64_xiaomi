@@ -58,7 +58,9 @@
   sg_copy_to_buffer
   __traceiter_android_vh_direct_io_update_bio
   __traceiter_android_vh_dm_update_clone_bio
+  __traceiter_android_vh_get_page_wmark
   __traceiter_android_vh_loop_prepare_cmd
+  __traceiter_android_vh_page_add_new_anon_rmap
   __traceiter_android_vh_ufs_mcq_abort
   __traceiter_android_vh_ufs_mcq_clear_cmd
   __traceiter_android_vh_ufs_mcq_clear_pending
@@ -77,7 +79,9 @@
   __traceiter_android_vh_ufs_use_mcq_hooks
   __tracepoint_android_vh_direct_io_update_bio
   __tracepoint_android_vh_dm_update_clone_bio
+  __tracepoint_android_vh_get_page_wmark
   __tracepoint_android_vh_loop_prepare_cmd
+  __tracepoint_android_vh_page_add_new_anon_rmap
   __tracepoint_android_vh_ufs_mcq_abort
   __tracepoint_android_vh_ufs_mcq_clear_cmd
   __tracepoint_android_vh_ufs_mcq_clear_pending
@@ -246,8 +250,14 @@
   __tracepoint_binder_txn_latency_free
 
 #required by reclaim module
+  __traceiter_android_vh_direct_reclaim_begin
+  __traceiter_android_vh_direct_reclaim_end
+  __traceiter_android_vh_throttle_direct_reclaim_bypass
   __traceiter_android_vh_tune_scan_type
   __traceiter_android_vh_tune_swappiness
+  __tracepoint_android_vh_direct_reclaim_begin
+  __tracepoint_android_vh_direct_reclaim_end
+  __tracepoint_android_vh_throttle_direct_reclaim_bypass
   __tracepoint_android_vh_tune_scan_type
   __tracepoint_android_vh_tune_swappiness
 
@@ -320,6 +330,7 @@
   __tracepoint_android_vh_binder_priority_skip
 
 #required by mi_mempool.ko module
+  prep_new_page
   __traceiter_android_vh_alloc_pages_failure_bypass
   __traceiter_android_vh_alloc_pages_reclaim_bypass
   __traceiter_android_vh_mmput
@@ -575,3 +586,9 @@
   rhashtable_walk_enter
   sock_no_ioctl
   sock_prot_inuse_add
+
+# required by launch_boost driver
+__traceiter_android_vh_filemap_read
+__tracepoint_android_vh_filemap_read
+__traceiter_android_vh_filemap_map_pages_range
+__tracepoint_android_vh_filemap_map_pages_range
